@@ -1,26 +1,52 @@
 import { useAuth } from '@/hooks/useAuth';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import AdminSidebar from '@/components/feature/AdminSidebar';
 import { getAllEmployees, getEmployeeCount } from '@/mocks/employeeStore';
 import { getAllVideos } from '@/mocks/videoStore';
 import { getAllQuestions } from '@/mocks/questionStore';
 import { getAllProgressForAdmin, getAllEmployeeProgress } from '@/mocks/progressStore';
+import { api } from '@/api/api';
+import { API } from '@/api/endpoints';
 
 export default function AdminDashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(false)
+  const [dashboardRecord, setDashboardRecord] = useState(null)
+  const modalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const fetchRecord = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get(`${API.REPORT}/dashboard`,);
+
+      setDashboardRecord(res.data);
+
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    fetchRecord();
+    return () => {
+      if (modalTimerRef.current) {
+        clearTimeout(modalTimerRef.current);
+      }
+    };
+  }, []);
   const allProgress = getAllProgressForAdmin();
   const completedCount = allProgress.filter((p) => p.status === 'completed').length;
   const totalAttempts = allProgress.reduce((acc, p) => acc + p.attempts, 0);
 
   const passRate = totalAttempts > 0
     ? Math.round(
-        (allProgress.filter((p) => p.attemptHistory.some((a) => a.passed)).length /
-          allProgress.filter((p) => p.attempts > 0).length) *
-          100,
-      )
+      (allProgress.filter((p) => p.attemptHistory.some((a) => a.passed)).length /
+        allProgress.filter((p) => p.attempts > 0).length) *
+      100,
+    )
     : 0;
 
   const employeeProgressData = getAllEmployeeProgress();
@@ -69,42 +95,42 @@ export default function AdminDashboardPage() {
     'Kitchen Staff': 'bg-secondary-100 text-secondary-600',
   };
 
-  if (!user || user.role !== 'admin') {
+  if (!user || user.role !== 'Admin') {
     return <Navigate to="/admin" replace />;
   }
 
-  const stats = [
+  const stats = dashboardRecord ? [
     {
       label: 'Employees',
-      value: getEmployeeCount(),
+      value: dashboardRecord.totalEmployees,
       icon: 'ri-team-line',
       color: 'bg-primary-100 text-primary-600',
       path: '/admin/employees',
     },
     {
       label: 'Training Videos',
-      value: getAllVideos().length,
+      value: dashboardRecord.totalVideos,
       icon: 'ri-video-line',
       color: 'bg-accent-100 text-accent-600',
       path: '/admin/videos',
     },
     {
       label: 'Quiz Questions',
-      value: getAllQuestions().length,
+      value: dashboardRecord.totalQuestions,
       icon: 'ri-question-line',
       color: 'bg-secondary-100 text-secondary-600',
       path: '/admin/questions',
     },
     {
       label: 'Completions',
-      value: completedCount,
+      value: dashboardRecord.completedVideos,
       icon: 'ri-checkbox-circle-line',
       color: 'bg-accent-100 text-accent-600',
       path: null,
     },
     {
       label: 'Total Attempts',
-      value: totalAttempts,
+      value: dashboardRecord.totalAttempts,
       icon: 'ri-refresh-line',
       color: 'bg-primary-100 text-primary-600',
       path: null,
@@ -116,7 +142,7 @@ export default function AdminDashboardPage() {
       color: 'bg-secondary-100 text-secondary-600',
       path: null,
     },
-  ];
+  ] : [];
 
   return (
     <div className="min-h-screen bg-background-50 flex">
@@ -135,7 +161,7 @@ export default function AdminDashboardPage() {
           </div>
         </header>
 
-        <div className="max-w-5xl mx-auto px-4 md:px-6 py-6 lg:py-8">
+        <div className="mx-auto px-4 md:px-6 py-6 lg:py-8">
           {/* Page Title */}
           <div className="mb-8">
             <h1 className="font-heading text-2xl md:text-3xl text-foreground-900 mb-1">Admin Dashboard</h1>
@@ -149,9 +175,8 @@ export default function AdminDashboardPage() {
                 key={stat.label}
                 onClick={() => stat.path && navigate(stat.path)}
                 disabled={!stat.path}
-                className={`text-left bg-background-50 border border-background-200 rounded-xl p-4 md:p-5 transition-all ${
-                  stat.path ? 'hover:border-primary-300 cursor-pointer' : 'cursor-default'
-                }`}
+                className={`text-left bg-background-50 border border-background-200 rounded-xl p-4 md:p-5 transition-all ${stat.path ? 'hover:border-primary-300 cursor-pointer' : 'cursor-default'
+                  }`}
               >
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${stat.color}`}>
                   <i className={`${stat.icon} text-xl`}></i>

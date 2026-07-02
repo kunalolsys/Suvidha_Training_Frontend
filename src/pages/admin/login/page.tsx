@@ -10,16 +10,16 @@ export default function AdminLoginPage() {
   const { login, user } = useAuth();
 
   // If already logged in as admin, redirect
-  if (user && user.role === 'admin') {
+  if (user && user.role === 'Admin') {
     return <Navigate to="/admin/dashboard" replace />;
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
-    const success = login(email.trim());
+    const success = await login(email.trim());
     if (!success) {
       setError('Invalid credentials. Please try again.');
       setLoading(false);
@@ -30,7 +30,7 @@ export default function AdminLoginPage() {
     const stored = localStorage.getItem('stu_emp');
     if (stored) {
       const u = JSON.parse(stored);
-      if (u.role === 'admin') {
+      if (u.role === 'Admin') {
         navigate('/admin/dashboard');
       } else {
         setError('You do not have admin access.');
@@ -56,9 +56,9 @@ export default function AdminLoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm text-foreground-700 mb-1.5">Email Address</label>
+              <label className="block text-sm text-foreground-700 mb-1.5">Email Address or Employee code</label>
               <input
-                type="email"
+                type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="admin@suvidha.com"

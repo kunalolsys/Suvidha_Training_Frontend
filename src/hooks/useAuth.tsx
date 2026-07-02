@@ -1,10 +1,11 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import type { Employee } from '@/mocks/employees';
 import { findEmployeeByEmail } from '@/mocks/employees';
+import { loginUser } from '@/services/auth.service';
 
 interface AuthContextType {
   user: Employee | null;
-  login: (email: string) => boolean;
+  login: (userName: string) => Promise<any>;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -26,19 +27,28 @@ function getStoredUser(): Employee | null {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Employee | null>(getStoredUser);
 
-  const login = useCallback((email: string): boolean => {
-    const employee = findEmployeeByEmail(email);
-    if (employee) {
-      setUser(employee);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(employee));
-      return true;
-    }
-    return false;
-  }, []);
+  const login = useCallback(
+    async (userName: string): Promise<boolean> => {
+      try {
+        const { token, user } = await loginUser(userName);
+
+        setUser(user);
+
+        localStorage.setItem("token", token);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+
+        return true;
+      } catch (error) {
+        console.error(error);
+        return false;
+      }
+    },
+    []
+  );
 
   const logout = useCallback(() => {
     setUser(null);
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.clear();
   }, []);
 
   return (

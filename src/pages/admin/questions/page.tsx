@@ -1,9 +1,14 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import AdminSidebar from '@/components/feature/AdminSidebar';
 import { getAllVideos } from '@/mocks/videoStore';
 import { getAllQuestions, addQuestion, updateQuestion, deleteQuestion, getNextQuestionId } from '@/mocks/questionStore';
+import { api } from '@/api/api';
+import { API } from '@/api/endpoints';
+import { message, Select } from 'antd';
+import { useDebounce } from '@/common/Debounce';
+import Pagination from '@/common/Pagination';
 
 interface QuestionForm {
   videoId: string;
@@ -31,57 +36,117 @@ const defaultForm: QuestionForm = {
 
 export default function AdminQuestionsPage() {
   const { user } = useAuth();
-  const [questions, setQuestions] = useState(getAllQuestions());
-  const [videos] = useState(getAllVideos());
+  const [questions, setQuestions] = useState([]);
+  const [videos, setVideos] = useState([]);
   const [search, setSearch] = useState('');
-  const [filterVideo, setFilterVideo] = useState<string>('All');
+  const [filterVideo, setFilterVideo] = useState<string>('');
   const [showDrawer, setShowDrawer] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<QuestionForm>(defaultForm);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const modalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [errors, setErrors] = useState<Partial<Record<keyof QuestionForm, string>>>();
   const [visibleOptions, setVisibleOptions] = useState<Set<'a' | 'b' | 'c' | 'd' | 'e'>>(new Set(['a', 'b', 'c']));
+  const [loading, setLoading] = useState(false)
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({
+    total: 0,
+    page: 1,
+    limit: 10,
+    totalPages: 1,
+  });
+  const debouncedSearch = useDebounce(search);
+  const fetchQuestions = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get(`${API.QUESTION}`, {
+        page,
+        limit: pagination.limit,
+        search: debouncedSearch,
+        video: filterVideo
+      });
 
-  const filtered = useMemo(() => {
-    return questions
-      .filter((q) => {
-        const matchSearch = q.questionText.toLowerCase().includes(search.toLowerCase());
-        const matchVideo = filterVideo === 'All' || q.videoId === filterVideo;
-        return matchSearch && matchVideo;
-      })
-      .sort((a, b) => a.sortOrder - b.sortOrder);
-  }, [questions, search, filterVideo]);
+      setQuestions(res.data.questions);
+      setPagination(res.data.pagination);
 
-  if (!user || user.role !== 'admin') {
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  const fetchVideos = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get(`${API.VIDEO}/all`,);
+
+      setVideos(res.data.videos);
+
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    fetchVideos();
+    fetchQuestions();
+    return () => {
+      if (modalTimerRef.current) {
+        clearTimeout(modalTimerRef.current);
+      }
+    };
+  }, [page, debouncedSearch, filterVideo]);
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, filterVideo]);
+
+  if (!user || user.role !== 'Admin') {
     return <Navigate to="/admin" replace />;
   }
 
   const openAdd = () => {
     setEditingId(null);
-    setForm({ ...defaultForm, videoId: videos[0]?.id || '' });
+    setForm({ ...defaultForm, videoId: videos[0]?._id || '' });
     setErrors({});
     setVisibleOptions(new Set(['a', 'b', 'c']));
     setShowDrawer(true);
   };
 
   const openEdit = (id: string) => {
-    const q = questions.find((x) => x.id === id);
+    const q = questions.find((x) => x._id === id);
     if (!q) return;
+
+    const correctIndex = q.options.findIndex((o: any) => o.isCorrect);
+
     setEditingId(id);
+
     setForm({
-      videoId: q.videoId,
-      questionText: q.questionText,
-      optionA: q.optionA,
-      optionB: q.optionB,
-      optionC: q.optionC,
-      optionD: q.optionD,
-      optionE: q.optionE || '',
-      correctOption: q.correctOption,
+      videoId: q.video._id,
+      questionText: q.question,
+      optionA: q.options[0]?.option || "",
+      optionB: q.options[1]?.option || "",
+      optionC: q.options[2]?.option || "",
+      optionD: q.options[3]?.option || "",
+      optionE: q.options[4]?.option || "",
+      correctOption:
+        correctIndex !== -1
+          ? (["a", "b", "c", "d", "e"][correctIndex] as
+            | "a"
+            | "b"
+            | "c"
+            | "d"
+            | "e")
+          : "a",
       sortOrder: q.sortOrder,
     });
-    const vis = new Set<'a' | 'b' | 'c' | 'd' | 'e'>(['a', 'b', 'c']);
-    if (q.optionD.trim()) vis.add('d');
-    if (q.optionE?.trim()) vis.add('e');
+
+    const vis = new Set<"a" | "b" | "c" | "d" | "e">(["a", "b", "c"]);
+
+    if (q.options[3]) vis.add("d");
+    if (q.options[4]) vis.add("e");
+
     setVisibleOptions(vis);
     setErrors({});
     setShowDrawer(true);
@@ -133,31 +198,76 @@ export default function AdminQuestionsPage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (!validate()) return;
-    const cleanForm = {
-      ...form,
-      optionE: form.optionE.trim() || undefined,
+
+    const payload = {
+      video: form.videoId,
+      question: form.questionText.trim(),
+      sortOrder: Number(form.sortOrder),
+      options: [
+        {
+          key: "a",
+          option: form.optionA.trim(),
+        },
+        {
+          key: "b",
+          option: form.optionB.trim(),
+        },
+        {
+          key: "c",
+          option: form.optionC.trim(),
+        },
+        {
+          key: "d",
+          option: form.optionD.trim(),
+        },
+        {
+          key: "e",
+          option: form.optionE.trim(),
+        },
+      ]
+        .filter((item) => item.option)
+        .map((item) => ({
+          option: item.option,
+          isCorrect: form.correctOption === item.key,
+        })),
     };
-    if (editingId) {
-      updateQuestion(editingId, cleanForm);
-    } else {
-      const newId = getNextQuestionId();
-      addQuestion({ id: newId, ...cleanForm });
+
+    try {
+      if (editingId) {
+        const res = await api.put(`${API.QUESTION}/${editingId}`, payload);
+
+        message.success(res.message || "Question updated successfully.");
+      } else {
+        const res = await api.post(API.QUESTION, payload);
+
+        message.success(res.message || "Question added successfully.");
+      }
+
+      fetchQuestions();
+      setShowDrawer(false);
+    } catch (err: any) {
+      message.error(err.message || "Something went wrong.");
     }
-    setQuestions(getAllQuestions());
-    setShowDrawer(false);
+  };
+  const handleDelete = async (id: string) => {
+    try {
+      const res = await api.delete(`${API.QUESTION}/${id}`);
+      message.success(res.message || "Question deleted successfully.");
+      fetchQuestions()
+      setDeleteId(null);
+    } catch (error) {
+      message.error(error.message || "Something went wrong.");
+    }
   };
 
-  const handleDelete = (id: string) => {
-    deleteQuestion(id);
-    setQuestions(getAllQuestions());
-    setDeleteId(null);
-  };
+
 
   const getVideoTitle = (videoId: string) => {
-    return videos.find((v) => v.id === videoId)?.title || videoId;
+    return videos.find((v) => v._id === videoId)?.title || videoId;
   };
 
   const updateField = <K extends keyof QuestionForm>(key: K, value: QuestionForm[K]) => {
@@ -188,7 +298,7 @@ export default function AdminQuestionsPage() {
           </div>
         </header>
 
-        <div className="max-w-5xl mx-auto px-4 md:px-6 py-6 lg:py-8">
+        <div className=" mx-auto px-4 md:px-6 py-6 lg:py-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
               <h1 className="font-heading text-2xl text-foreground-900 mb-1">Question Management</h1>
@@ -212,19 +322,31 @@ export default function AdminQuestionsPage() {
                 className="w-full pl-10 pr-4 py-2.5 bg-background-50 border border-background-200 rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400"
               />
             </div>
-            <select
-              value={filterVideo}
-              onChange={(e) => setFilterVideo(e.target.value)}
-              className="px-4 py-2.5 bg-background-50 border border-background-200 rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400 cursor-pointer"
-            >
-              <option value="All">All Videos</option>
-              {videos.map((v) => <option key={v.id} value={v.id}>{v.title}</option>)}
-            </select>
+            <Select
+              value={filterVideo || undefined}
+              placeholder="All Videos"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              onChange={(value) => setFilterVideo(value || "")}
+              className="w-64"
+              options={[
+                {
+                  label: "All Videos",
+                  value: "",
+                },
+                ...videos.map((d) => ({
+                  label: d.title,
+                  value: d._id,
+                })),
+              ]}
+            />
+
           </div>
 
           {/* Table */}
-          <div className="bg-background-50 border border-background-200 rounded-xl overflow-hidden">
-            <div className="overflow-x-auto">
+          <div className="bg-background-50 border border-background-200 rounded-xl flex flex-col h-[700px]">
+            <div className="flex-1 overflow-auto">
               <table className="w-full text-left">
                 <thead>
                   <tr className="bg-background-100 border-b border-background-200">
@@ -233,32 +355,38 @@ export default function AdminQuestionsPage() {
                     <th className="px-5 py-3 text-xs font-semibold text-foreground-600">Question</th>
                     <th className="px-5 py-3 text-xs font-semibold text-foreground-600">Options</th>
                     <th className="px-5 py-3 text-xs font-semibold text-foreground-600">Correct</th>
+                    <th className="px-5 py-3 text-xs font-semibold text-foreground-600">Sequence Order</th>
                     <th className="px-5 py-3 text-xs font-semibold text-foreground-600 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-background-100">
-                  {filtered.map((q) => (
-                    <tr key={q.id} className="hover:bg-background-100/50 transition-colors">
-                      <td className="px-5 py-3 text-sm text-foreground-500 font-mono">{q.id}</td>
-                      <td className="px-5 py-3 text-sm text-foreground-600 max-w-[160px] truncate">{getVideoTitle(q.videoId)}</td>
-                      <td className="px-5 py-3 text-sm text-foreground-900 font-medium max-w-[240px] truncate">{q.questionText}</td>
-                      <td className="px-5 py-3 text-sm text-foreground-600">{[q.optionA, q.optionB, q.optionC, q.optionD, q.optionE].filter(Boolean).length}</td>
+                  {questions.map((q) => (
+                    <tr key={q._id} className="hover:bg-background-100/50 transition-colors">
+                      <td className="px-5 py-3 text-sm text-foreground-500 font-mono">{q.questionId}</td>
+                      <td className="px-5 py-3 text-sm text-foreground-600 max-w-[160px] truncate">{getVideoTitle(q.video.title)}</td>
+                      <td className="px-5 py-3 text-sm text-foreground-900 font-medium max-w-[240px] truncate">{q.question}</td>
+                      <td className="px-5 py-3 text-sm text-foreground-600">{q.options.filter(Boolean).length}</td>
                       <td className="px-5 py-3">
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-accent-100 text-accent-700 font-medium uppercase">{q.correctOption}</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-accent-100 text-accent-700 font-medium uppercase">  {q.options.find((opt) => opt.isCorrect)?.option || "-"}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3">
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-accent-100 text-accent-700 font-medium uppercase">  {q.sortOrder || "-"}
+                        </span>
                       </td>
                       <td className="px-5 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <button onClick={() => openEdit(q.id)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-background-200 text-foreground-500 hover:text-foreground-700 transition-colors cursor-pointer">
+                          <button onClick={() => openEdit(q._id)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-background-200 text-foreground-500 hover:text-foreground-700 transition-colors cursor-pointer">
                             <i className="ri-pencil-line text-base"></i>
                           </button>
-                          <button onClick={() => setDeleteId(q.id)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-100 text-foreground-500 hover:text-red-500 transition-colors cursor-pointer">
+                          <button onClick={() => setDeleteId(q._id)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-100 text-foreground-500 hover:text-red-500 transition-colors cursor-pointer">
                             <i className="ri-delete-bin-line text-base"></i>
                           </button>
                         </div>
                       </td>
                     </tr>
                   ))}
-                  {filtered.length === 0 && (
+                  {questions.length === 0 && (
                     <tr>
                       <td colSpan={6} className="px-5 py-10 text-center text-sm text-foreground-500">
                         No questions found matching your search.
@@ -267,6 +395,15 @@ export default function AdminQuestionsPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+            <div className="border-background-200 bg-background-50 px-6 py-4 shrink-0">
+              <Pagination
+                page={pagination.page}
+                totalPages={pagination.totalPages}
+                total={pagination.total}
+                limit={pagination.limit}
+                onPageChange={setPage}
+              />
             </div>
           </div>
         </div>
@@ -299,14 +436,26 @@ export default function AdminQuestionsPage() {
                 {/* Linked Video */}
                 <div>
                   <label className="block text-sm font-medium text-foreground-700 mb-2">Linked Video <span className="text-red-500">*</span></label>
-                  <select
+                  <Select
                     value={form.videoId}
-                    onChange={(e) => updateField('videoId', e.target.value)}
+                    placeholder="Select video"
+                    allowClear
+                    showSearch
+                    optionFilterProp="label"
+                    onChange={(value) => updateField('videoId', value)}
                     className={`w-full px-4 py-3 bg-background-50 border rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400 cursor-pointer transition-colors ${errors.videoId ? 'border-red-300 bg-red-50/30' : 'border-background-200'}`}
-                  >
-                    <option value="">Select a video...</option>
-                    {videos.map((v) => <option key={v.id} value={v.id}>{v.title}</option>)}
-                  </select>
+                    options={[
+                      {
+                        label: "Select video",
+                        value: "",
+                      },
+                      ...videos.map((d) => ({
+                        label: d.title,
+                        value: d._id,
+                      })),
+                    ]}
+                  />
+
                   {errors.videoId && <p className="text-xs text-red-500 mt-1.5">{errors.videoId}</p>}
                 </div>
 
@@ -426,13 +575,12 @@ export default function AdminQuestionsPage() {
                           type="button"
                           disabled={!visibleOptions.has(opt)}
                           onClick={() => updateField('correctOption', opt)}
-                          className={`w-10 h-10 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
-                            !visibleOptions.has(opt)
-                              ? 'opacity-30 cursor-not-allowed bg-background-100 text-foreground-400'
-                              : form.correctOption === opt
-                                ? 'bg-primary-500 text-background-50 shadow-sm'
-                                : 'bg-background-100 text-foreground-600 hover:bg-background-200'
-                          }`}
+                          className={`w-10 h-10 rounded-xl text-sm font-semibold transition-all cursor-pointer ${!visibleOptions.has(opt)
+                            ? 'opacity-30 cursor-not-allowed bg-background-100 text-foreground-400'
+                            : form.correctOption === opt
+                              ? 'bg-primary-500 text-background-50 shadow-sm'
+                              : 'bg-background-100 text-foreground-600 hover:bg-background-200'
+                            }`}
                         >
                           {opt.toUpperCase()}
                         </button>

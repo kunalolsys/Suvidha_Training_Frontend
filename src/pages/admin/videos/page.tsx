@@ -1,15 +1,18 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import AdminSidebar from '@/components/feature/AdminSidebar';
-import { designations } from '@/mocks/designations';
-import type { Designation } from '@/mocks/designations';
 import { getAllVideos, addVideo, updateVideo, deleteVideo, getNextVideoId } from '@/mocks/videoStore';
+import { api } from '@/api/api';
+import { API } from '@/api/endpoints';
+import { useDebounce } from '@/common/Debounce';
+import Pagination from '@/common/Pagination';
+import { message, Select } from 'antd';
 
 interface VideoForm {
   title: string;
   veedUrl: string;
-  designation: Designation;
+  designation: string;
   sortOrder: number;
   duration: string;
   thumbnail: string;
@@ -18,7 +21,7 @@ interface VideoForm {
 const defaultForm: VideoForm = {
   title: '',
   veedUrl: '',
-  designation: 'Sales',
+  designation: '',
   sortOrder: 1,
   duration: '10:00',
   thumbnail: '',
@@ -26,30 +29,76 @@ const defaultForm: VideoForm = {
 
 export default function AdminVideosPage() {
   const { user } = useAuth();
-  const [videos, setVideos] = useState(getAllVideos());
+  const [videos, setVideos] = useState([]);
+  const [designations, setDesignations] = useState([]);
+
   const [search, setSearch] = useState('');
-  const [filterDesignation, setFilterDesignation] = useState<string>('All');
+  const [filterDesignation, setFilterDesignation] = useState<string>('');
   const [showDrawer, setShowDrawer] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<VideoForm>(defaultForm);
   const [errors, setErrors] = useState<Partial<Record<keyof VideoForm, string>>>();
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const modalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const filtered = useMemo(() => {
-    return videos
-      .filter((v) => {
-        const matchSearch = v.title.toLowerCase().includes(search.toLowerCase()) ||
-          v.designation.toLowerCase().includes(search.toLowerCase());
-        const matchDes = filterDesignation === 'All' || v.designation === filterDesignation;
-        return matchSearch && matchDes;
-      })
-      .sort((a, b) => {
-        if (a.designation !== b.designation) return a.designation.localeCompare(b.designation);
-        return a.sortOrder - b.sortOrder;
+  const [loading, setLoading] = useState(false)
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({
+    total: 0,
+    page: 1,
+    limit: 10,
+    totalPages: 1,
+  });
+  const debouncedSearch = useDebounce(search);
+
+  const fetchVideos = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get(`${API.VIDEO}`, {
+        page,
+        limit: pagination.limit,
+        search: debouncedSearch,
+        designation: filterDesignation
       });
-  }, [videos, search, filterDesignation]);
 
-  if (!user || user.role !== 'admin') {
+      setVideos(res.data.videos);
+      setPagination(res.data.pagination);
+
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  const fetchDesignations = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get(`${API.DESIGNATION}/all`, {});
+
+      setDesignations(res.data.designations);
+
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  // Cleanup timer on unmount
+  useEffect(() => {
+    fetchVideos();
+    fetchDesignations();
+
+
+    return () => {
+      if (modalTimerRef.current) {
+        clearTimeout(modalTimerRef.current);
+      }
+    };
+  }, [page, debouncedSearch, filterDesignation]);
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, filterDesignation]);
+  if (!user || user.role !== 'Admin') {
     return <Navigate to="/admin" replace />;
   }
 
@@ -61,13 +110,13 @@ export default function AdminVideosPage() {
   };
 
   const openEdit = (id: string) => {
-    const v = videos.find((x) => x.id === id);
+    const v = videos.find((x) => x._id === id);
     if (!v) return;
     setEditingId(id);
     setForm({
       title: v.title,
       veedUrl: v.veedUrl,
-      designation: v.designation,
+      designation: v.designation._id,
       sortOrder: v.sortOrder,
       duration: v.duration,
       thumbnail: v.thumbnail,
@@ -79,6 +128,7 @@ export default function AdminVideosPage() {
   const validate = (): boolean => {
     const newErrors: Partial<Record<keyof VideoForm, string>> = {};
     if (!form.title.trim()) newErrors.title = 'Video title is required';
+    if (!form.designation) newErrors.designation = 'Designation is required';
     if (!form.veedUrl.trim()) newErrors.veedUrl = 'Veed.io URL is required';
     if (!form.duration.trim()) newErrors.duration = 'Duration is required';
     if (form.sortOrder < 1) newErrors.sortOrder = 'Sequence order must be at least 1';
@@ -86,23 +136,36 @@ export default function AdminVideosPage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (!validate()) return;
-    if (editingId) {
-      updateVideo(editingId, form);
-    } else {
-      const newId = getNextVideoId();
-      addVideo({ id: newId, ...form });
+
+    try {
+      if (editingId) {
+        const res = await api.put(`${API.VIDEO}/${editingId}`, form);
+        message.success(res.message || "Video updated successfully.");
+      } else {
+        const res = await api.post(API.VIDEO, form);
+        message.success(res.message || "Video added successfully.");
+      }
+
+      fetchVideos();
+      setShowDrawer(false);
+    } catch (err: any) {
+      message.error(err.message || "Something went wrong.");
     }
-    setVideos(getAllVideos());
-    setShowDrawer(false);
   };
 
-  const handleDelete = (id: string) => {
-    deleteVideo(id);
-    setVideos(getAllVideos());
-    setDeleteId(null);
+  const handleDelete = async (id: string) => {
+    try {
+      const res = await api.delete(`${API.VIDEO}/${id}`);
+      message.success(res.message || "Video deleted successfully.");
+      fetchVideos()
+      setDeleteId(null);
+    } catch (error) {
+      message.error(error.message || "Something went wrong.");
+    }
   };
 
   const updateField = <K extends keyof VideoForm>(key: K, value: VideoForm[K]) => {
@@ -133,7 +196,7 @@ export default function AdminVideosPage() {
           </div>
         </header>
 
-        <div className="max-w-5xl mx-auto px-4 md:px-6 py-6 lg:py-8">
+        <div className=" mx-auto px-4 md:px-6 py-6 lg:py-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
               <h1 className="font-heading text-2xl text-foreground-900 mb-1">Video Management</h1>
@@ -157,19 +220,30 @@ export default function AdminVideosPage() {
                 className="w-full pl-10 pr-4 py-2.5 bg-background-50 border border-background-200 rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400"
               />
             </div>
-            <select
-              value={filterDesignation}
-              onChange={(e) => setFilterDesignation(e.target.value)}
-              className="px-4 py-2.5 bg-background-50 border border-background-200 rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400 cursor-pointer"
-            >
-              <option value="All">All Designations</option>
-              {designations.map((d) => <option key={d} value={d}>{d}</option>)}
-            </select>
+            <Select
+              value={filterDesignation || undefined}
+              placeholder="All Designations"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              onChange={(value) => setFilterDesignation(value || "")}
+              className="w-64"
+              options={[
+                {
+                  label: "All Designations",
+                  value: "",
+                },
+                ...designations.map((d) => ({
+                  label: d.name,
+                  value: d._id,
+                })),
+              ]}
+            />
           </div>
 
           {/* Table */}
-          <div className="bg-background-50 border border-background-200 rounded-xl overflow-hidden">
-            <div className="overflow-x-auto">
+          <div className="bg-background-50 border border-background-200 rounded-xl flex flex-col h-[700px]">
+            <div className="flex-1 overflow-auto">
               <table className="w-full text-left">
                 <thead>
                   <tr className="bg-background-100 border-b border-background-200">
@@ -182,28 +256,28 @@ export default function AdminVideosPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-background-100">
-                  {filtered.map((v) => (
-                    <tr key={v.id} className="hover:bg-background-100/50 transition-colors">
-                      <td className="px-5 py-3 text-sm text-foreground-500 font-mono">{v.id}</td>
+                  {videos.map((v) => (
+                    <tr key={v._id} className="hover:bg-background-100/50 transition-colors">
+                      <td className="px-5 py-3 text-sm text-foreground-500 font-mono">{v.videoId}</td>
                       <td className="px-5 py-3 text-sm text-foreground-900 font-medium">{v.title}</td>
                       <td className="px-5 py-3">
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-primary-100 text-primary-700 font-medium">{v.designation}</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-primary-100 text-primary-700 font-medium">{v.designation.name}</span>
                       </td>
                       <td className="px-5 py-3 text-sm text-foreground-600">{v.sortOrder}</td>
                       <td className="px-5 py-3 text-sm text-foreground-600">{v.duration}</td>
                       <td className="px-5 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <button onClick={() => openEdit(v.id)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-background-200 text-foreground-500 hover:text-foreground-700 transition-colors cursor-pointer">
+                          <button onClick={() => openEdit(v._id)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-background-200 text-foreground-500 hover:text-foreground-700 transition-colors cursor-pointer">
                             <i className="ri-pencil-line text-base"></i>
                           </button>
-                          <button onClick={() => setDeleteId(v.id)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-100 text-foreground-500 hover:text-red-500 transition-colors cursor-pointer">
+                          <button onClick={() => setDeleteId(v._id)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-100 text-foreground-500 hover:text-red-500 transition-colors cursor-pointer">
                             <i className="ri-delete-bin-line text-base"></i>
                           </button>
                         </div>
                       </td>
                     </tr>
                   ))}
-                  {filtered.length === 0 && (
+                  {videos.length === 0 && (
                     <tr>
                       <td colSpan={6} className="px-5 py-10 text-center text-sm text-foreground-500">
                         No videos found matching your search.
@@ -212,6 +286,15 @@ export default function AdminVideosPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+            <div className="border-background-200 bg-background-50 px-6 py-4 shrink-0">
+              <Pagination
+                page={pagination.page}
+                totalPages={pagination.totalPages}
+                total={pagination.total}
+                limit={pagination.limit}
+                onPageChange={setPage}
+              />
             </div>
           </div>
         </div>
@@ -269,13 +352,26 @@ export default function AdminVideosPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground-700 mb-2">Designation <span className="text-red-500">*</span></label>
-                    <select
+                    <Select
                       value={form.designation}
-                      onChange={(e) => updateField('designation', e.target.value as Designation)}
-                      className="w-full px-4 py-3 bg-background-50 border border-background-200 rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400 cursor-pointer"
-                    >
-                      {designations.map((d) => <option key={d} value={d}>{d}</option>)}
-                    </select>
+                      placeholder="All Designations"
+                      allowClear
+                      showSearch
+                      optionFilterProp="label"
+                      onChange={(value) => updateField('designation', value)}
+                      className="w-full px-3 py-2.5 border border-background-200 rounded-lg text-sm text-foreground-900 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 transition-all cursor-pointer"
+                      options={[
+                        {
+                          label: "Select option",
+                          value: "",
+                        },
+                        ...designations.map((d) => ({
+                          label: d.name,
+                          value: d._id,
+                        })),
+                      ]}
+                    />
+                    {errors.designation && <p className="text-xs text-red-500 mt-1">{errors.designation}</p>}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-foreground-700 mb-2">Sequence Order <span className="text-red-500">*</span></label>

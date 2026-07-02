@@ -12,7 +12,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (isAuthenticated && user) {
-      if (user.role === 'admin') {
+      if (user.role === 'Admin') {
         navigate('/admin/dashboard', { replace: true });
       } else {
         navigate('/dashboard', { replace: true });
@@ -28,7 +28,7 @@ export default function LoginPage() {
     };
   }, []);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -40,13 +40,12 @@ export default function LoginPage() {
     setLoading(true);
 
     // Simulate brief network delay
-    loginTimerRef.current = setTimeout(() => {
-      const success = login(email.trim());
-      if (!success) {
-        setError('No account found with this email. Please check and try again.');
-        setLoading(false);
-      }
-    }, 800);
+    const success = await login(email.trim());
+    if (!success) {
+      setError('No account found with this email or code. Please check and try again.');
+      setLoading(false);
+    }
+
   };
 
   return (
@@ -66,7 +65,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-foreground-700 mb-2">
-                Work Email
+                Work Email or Employee code
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -74,7 +73,7 @@ export default function LoginPage() {
                 </div>
                 <input
                   id="email"
-                  type="email"
+                  type="text"
                   value={email}
                   onChange={(e) => { setEmail(e.target.value); setError(''); }}
                   placeholder="you@suvidha.com"

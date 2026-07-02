@@ -10,13 +10,27 @@ import {
   getNextEmployeeId,
   getAllStores,
 } from '@/mocks/employeeStore';
-import { designations } from '@/mocks/designations';
 import type { Employee } from '@/mocks/employees';
+import { api } from '@/api/api';
+import { API } from '@/api/endpoints';
+import Pagination from '@/common/Pagination';
+import { useDebounce } from '@/common/Debounce';
+import { message, Select } from 'antd';
+import EmployeeImportModal from '@/common/csvUpload';
 
 export default function AdminEmployeesPage() {
   const { user } = useAuth();
 
-  const [employees, setEmployees] = useState<Employee[]>(getAllEmployees());
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [designations, setDesignations] = useState([]);
+  const [stores, setStores] = useState([]);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({
+    total: 0,
+    page: 1,
+    limit: 10,
+    totalPages: 1,
+  });
   const [search, setSearch] = useState('');
   const [designationFilter, setDesignationFilter] = useState('');
   const [storeFilter, setStoreFilter] = useState('');
@@ -33,31 +47,71 @@ export default function AdminEmployeesPage() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState('');
   const modalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [loading, setLoading] = useState(false)
+  const debouncedSearch = useDebounce(search);
 
-  const stores = useMemo(() => getAllStores(), [employees]);
+  const fetchEmployees = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get(`${API.USER}`, {
+        page,
+        limit: pagination.limit,
+        search: debouncedSearch,
+        designation: designationFilter,
+        store: storeFilter,
+      });
 
-  const filtered = useMemo(() => {
-    return employees.filter((e) => {
-      if (e.role === 'admin') return false;
-      const matchesSearch =
-        e.name.toLowerCase().includes(search.toLowerCase()) ||
-        e.email.toLowerCase().includes(search.toLowerCase());
-      const matchesDesignation = !designationFilter || e.designation === designationFilter;
-      const matchesStore = !storeFilter || e.storeId === storeFilter;
-      return matchesSearch && matchesDesignation && matchesStore;
-    });
-  }, [employees, search, designationFilter, storeFilter]);
+      setEmployees(res.data.users);
+      setPagination(res.data.pagination);
 
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  const fetchDesignations = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get(`${API.DESIGNATION}/all`, {});
+
+      setDesignations(res.data.designations);
+
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  const fetchStores = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get(`${API.STORE}/all`, {});
+
+      setStores(res.data.stores);
+
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
   // Cleanup timer on unmount
   useEffect(() => {
+    fetchEmployees();
+    fetchStores();
+    fetchDesignations();
+
     return () => {
       if (modalTimerRef.current) {
         clearTimeout(modalTimerRef.current);
       }
     };
-  }, []);
-
-  if (!user || user.role !== 'admin') {
+  }, [page, debouncedSearch, designationFilter, storeFilter]);
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, designationFilter, storeFilter]);
+  if (!user || user.role !== 'Admin') {
     return <Navigate to="/admin" replace />;
   }
 
@@ -65,7 +119,7 @@ export default function AdminEmployeesPage() {
     setEditingId(null);
     setFormName('');
     setFormEmail('');
-    setFormDesignation(designations[0]);
+    setFormDesignation("");
     setFormStoreId('');
     setFormStoreName('');
     setFormError('');
@@ -74,12 +128,12 @@ export default function AdminEmployeesPage() {
   };
 
   const openEditModal = (employee: Employee) => {
-    setEditingId(employee.id);
+    setEditingId(employee._id);
     setFormName(employee.name);
     setFormEmail(employee.email);
-    setFormDesignation(employee.designation);
-    setFormStoreId(employee.storeId);
-    setFormStoreName(employee.storeName);
+    setFormDesignation(employee.designation._id);
+    setFormStoreId("");
+    setFormStoreName(employee.store._id);
     setFormError('');
     setFormSuccess('');
     setIsModalOpen(true);
@@ -95,62 +149,61 @@ export default function AdminEmployeesPage() {
     setFormError('');
   };
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: any) => {
     e.preventDefault();
     setFormError('');
     setFormSuccess('');
 
-    if (!formName.trim() || !formEmail.trim() || !formDesignation || !formStoreId.trim() || !formStoreName.trim()) {
+    if (!formName.trim() || !formEmail.trim() || !formDesignation || !formStoreName.trim()) {
       setFormError('All fields are required, including Store ID and Store Name.');
       return;
     }
 
-    const emailExists = employees.some(
-      (e) => e.email.toLowerCase() === formEmail.trim().toLowerCase() && e.id !== editingId,
-    );
-    if (emailExists) {
-      setFormError('An employee with this email already exists.');
-      return;
-    }
-
     if (editingId) {
-      updateEmployee(editingId, {
+      const res = await api.put(`${API.USER}/${editingId}`, {
         name: formName.trim(),
         email: formEmail.trim().toLowerCase(),
-        designation: formDesignation as Employee['designation'],
-        storeId: formStoreId.trim().toUpperCase(),
-        storeName: formStoreName.trim(),
-      });
-      setFormSuccess('Employee updated successfully.');
+        designation: formDesignation,
+        store: formStoreName,
+      })
+      if (res.success) {
+        setFormSuccess(res.message || 'Employee updated successfully.');
+      } else {
+        setFormError(res.message || 'Something went wrong.');
+      }
     } else {
-      const newId = getNextEmployeeId();
-      const initials = formName
-        .trim()
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2);
-      addEmployee({
-        id: newId,
-        name: formName.trim(),
-        email: formEmail.trim().toLowerCase(),
-        designation: formDesignation as Employee['designation'],
-        avatar: initials || 'EM',
-        role: 'employee',
-        storeId: formStoreId.trim().toUpperCase(),
-        storeName: formStoreName.trim(),
-      });
-      setFormSuccess('Employee added successfully.');
+      // const newId = getNextEmployeeId();
+      // const initials = formName
+      //   .trim()
+      //   .split(' ')
+      //   .map((n) => n[0])
+      //   .join('')
+      //   .toUpperCase()
+      //   .slice(0, 2);
+      // addEmployee({
+      //   id: newId,
+      //   name: formName.trim(),
+      //   email: formEmail.trim().toLowerCase(),
+      //   designation: formDesignation as Employee['designation'],
+      //   avatar: initials || 'EM',
+      //   role: 'employee',
+      //   storeId: formStoreId.trim().toUpperCase(),
+      //   storeName: formStoreName.trim(),
+      // });
+      // setFormSuccess('Employee added successfully.');
     }
-
-    setEmployees(getAllEmployees());
+    fetchEmployees()
     modalTimerRef.current = setTimeout(() => closeModal(), 800);
   };
 
-  const handleDelete = (id: string) => {
-    deleteEmployee(id);
-    setEmployees(getAllEmployees());
+  const handleDelete = async (id: string) => {
+    const res = await api.delete(`${API.USER}/${id}`)
+    if (res.success) {
+      message.success(res.message || "Employee deleted successfully.")
+    } else {
+      message.error(res.message || "Something went wrong.")
+    }
+    fetchEmployees()
     setDeleteConfirmId(null);
   };
 
@@ -180,20 +233,22 @@ export default function AdminEmployeesPage() {
           </div>
         </header>
 
-        <div className="max-w-5xl mx-auto px-4 md:px-6 py-6 lg:py-8">
+        <div className=" mx-auto px-4 md:px-6 py-6 lg:py-8">
           {/* Page Title */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <div>
               <h1 className="font-heading text-xl md:text-2xl text-foreground-900">Employees</h1>
               <p className="text-sm text-foreground-500 mt-0.5">Manage your workforce and training assignments</p>
             </div>
-            <button
+            {/* <button
               onClick={openAddModal}
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary-500 hover:bg-primary-600 text-background-50 text-sm font-medium rounded-lg transition-colors whitespace-nowrap cursor-pointer"
             >
               <i className="ri-add-line text-lg"></i>
               Add Employee
-            </button>
+            </button> */}
+
+            <EmployeeImportModal />
           </div>
 
           {/* Filters */}
@@ -210,92 +265,120 @@ export default function AdminEmployeesPage() {
                 className="w-full pl-10 pr-4 py-2.5 bg-background-50 border border-background-200 rounded-lg text-sm text-foreground-900 placeholder:text-foreground-400 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 transition-all"
               />
             </div>
-            <select
-              value={designationFilter}
-              onChange={(e) => setDesignationFilter(e.target.value)}
-              className="px-3 py-2.5 bg-background-50 border border-background-200 rounded-lg text-sm text-foreground-700 focus:outline-none focus:border-primary-400 cursor-pointer"
-            >
-              <option value="">All Designations</option>
-              {designations.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-            <select
-              value={storeFilter}
-              onChange={(e) => setStoreFilter(e.target.value)}
-              className="px-3 py-2.5 bg-background-50 border border-background-200 rounded-lg text-sm text-foreground-700 focus:outline-none focus:border-primary-400 cursor-pointer min-w-[160px]"
-            >
-              <option value="">All Stores</option>
-              {stores.map((s) => (
-                <option key={s.storeId} value={s.storeId}>
-                  {s.storeName} ({s.employeeCount})
-                </option>
-              ))}
-            </select>
+            <Select
+              value={designationFilter || undefined}
+              placeholder="All Designations"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              onChange={(value) => setDesignationFilter(value || "")}
+              className="w-64"
+              options={[
+                {
+                  label: "All Designations",
+                  value: "",
+                },
+                ...designations.map((d) => ({
+                  label: d.name,
+                  value: d._id,
+                })),
+              ]}
+            />
+            <Select
+              showSearch
+              allowClear
+              size="large"
+              placeholder="All Stores"
+              value={storeFilter || undefined}
+              onChange={(value) => setStoreFilter(value || "")}
+              options={stores.map((s) => ({
+                label: s.name,
+                value: s._id,
+              }))}
+              optionFilterProp="label"
+              className="min-w-[220px] w-full sm:w-auto"
+            />
           </div>
 
           {/* Table */}
-          <div className="bg-background-50 border border-background-200 rounded-xl overflow-hidden">
-            <div className="overflow-x-auto">
+          <div className="bg-background-50 border border-background-200 rounded-xl flex flex-col h-[700px]">
+            {/* Scrollable Table */}
+            <div className="flex-1 overflow-auto">
               <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-background-100 border-b border-background-200">
-                    <th className="px-4 py-3 text-xs font-semibold text-foreground-500 uppercase tracking-wider">Employee</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-foreground-500 uppercase tracking-wider">Email</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-foreground-500 uppercase tracking-wider">Store</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-foreground-500 uppercase tracking-wider">Designation</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-foreground-500 uppercase tracking-wider text-right">Actions</th>
+                <thead className="sticky top-0 bg-background-100 z-10">
+                  <tr className="border-b border-background-200">
+                    <th className="px-4 py-3">Employee Name</th>
+                    <th className="px-4 py-3">Employee Code</th>
+                    <th className="px-4 py-3">Email</th>
+                    <th className="px-4 py-3">Store</th>
+                    <th className="px-4 py-3">Designation</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
+
+
                 <tbody className="divide-y divide-background-100">
-                  {filtered.length === 0 ? (
+                  {employees.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-4 py-10 text-center text-sm text-foreground-400">
+                      <td
+                        colSpan={5}
+                        className="h-[450px] text-center text-sm text-foreground-400"
+                      >
                         <i className="ri-team-line text-2xl mb-2 block text-foreground-300"></i>
                         No employees found.
                       </td>
                     </tr>
                   ) : (
-                    filtered.map((emp) => (
-                      <tr key={emp.id} className="hover:bg-background-50/70 transition-colors">
+                    employees.map((emp) => (
+                      <tr
+                        key={emp.employeeId}
+                        className="hover:bg-background-50/70 transition-colors"
+                      >
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
                             <div className="w-9 h-9 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xs font-semibold">
                               {getInitials(emp.name)}
                             </div>
-                            <span className="text-sm font-medium text-foreground-900">{emp.name}</span>
+                            <span className="text-sm font-medium text-foreground-900">
+                              {emp.name}
+                            </span>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-sm text-foreground-600">{emp.email}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-foreground-400 font-mono">{emp.storeId}</span>
-                            <span className="text-sm text-foreground-700">{emp.storeName}</span>
-                          </div>
+                        <td className="px-4 py-3 text-sm text-foreground-600">
+                          {emp.employeeId}
                         </td>
+
+                        <td className="px-4 py-3 text-sm text-foreground-600">
+                          {emp.email}
+                        </td>
+
                         <td className="px-4 py-3">
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-secondary-100 text-secondary-700">
-                            {emp.designation}
+                          <span className="text-sm text-foreground-700">
+                            {emp.store.name}
                           </span>
                         </td>
+
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-secondary-100 text-secondary-700">
+                            {emp.designation.name}
+                          </span>
+                        </td>
+
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-1">
                             <button
                               onClick={() => openEditModal(emp)}
-                              className="p-2 text-foreground-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors cursor-pointer"
-                              title="Edit"
+                              className="p-2 text-foreground-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
                             >
                               <i className="ri-edit-line text-lg"></i>
                             </button>
-                            <button
-                              onClick={() => setDeleteConfirmId(emp.id)}
-                              className="p-2 text-foreground-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                              title="Delete"
+
+                            {/* <button
+                              onClick={() => setDeleteConfirmId(emp._id)}
+                              className="p-2 text-foreground-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             >
                               <i className="ri-delete-bin-line text-lg"></i>
-                            </button>
+                            </button> */}
                           </div>
                         </td>
                       </tr>
@@ -303,6 +386,17 @@ export default function AdminEmployeesPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+
+            {/* Always Visible Pagination */}
+            <div className="border-background-200 bg-background-50 px-6 py-4 shrink-0">
+              <Pagination
+                page={pagination.page}
+                totalPages={pagination.totalPages}
+                total={pagination.total}
+                limit={pagination.limit}
+                onPageChange={setPage}
+              />
             </div>
           </div>
         </div>
@@ -365,8 +459,8 @@ export default function AdminEmployeesPage() {
                   className="w-full px-3 py-2.5 bg-background-100 border border-background-200 rounded-lg text-sm text-foreground-900 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 transition-all cursor-pointer"
                 >
                   {designations.map((d) => (
-                    <option key={d} value={d}>
-                      {d}
+                    <option key={d._id} value={d._id}>
+                      {d.name}
                     </option>
                   ))}
                 </select>
@@ -385,13 +479,17 @@ export default function AdminEmployeesPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground-700 mb-1.5">Store Name</label>
-                  <input
-                    type="text"
+                  <select
                     value={formStoreName}
                     onChange={(e) => setFormStoreName(e.target.value)}
-                    placeholder="e.g. Suvidha - Hisar"
-                    className="w-full px-3 py-2.5 bg-background-100 border border-background-200 rounded-lg text-sm text-foreground-900 placeholder:text-foreground-400 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 transition-all"
-                  />
+                    className="w-full px-3 py-2.5 bg-background-100 border border-background-200 rounded-lg text-sm text-foreground-900 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 transition-all cursor-pointer"
+                  >
+                    {stores.map((s) => (
+                      <option key={s._id} value={s._id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 

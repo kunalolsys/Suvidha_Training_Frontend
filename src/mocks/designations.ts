@@ -11,3 +11,4 @@ export const designations = [
 ] as const;
 
 export type Designation = typeof designations[number];
+

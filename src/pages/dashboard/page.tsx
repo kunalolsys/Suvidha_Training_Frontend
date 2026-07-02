@@ -10,7 +10,17 @@ function getEmployeeVideos(designation: string): Video[] {
     .filter((v) => v.designation === designation)
     .sort((a, b) => a.sortOrder - b.sortOrder);
 }
+const getInitials = (name?: string) => {
+  if (!name) return "";
 
+  const parts = name.trim().split(/\s+/);
+
+  if (parts.length === 1) {
+    return parts[0].substring(0, 2).toUpperCase();
+  }
+
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+};
 function getStatusIcon(status: EmployeeProgress['status']) {
   switch (status) {
     case 'completed':
@@ -54,6 +64,7 @@ function formatDate(dateStr: string): string {
 
 export default function DashboardPage() {
   const { user, logout, isAuthenticated } = useAuth();
+  console.log(user, isAuthenticated)
   const navigate = useNavigate();
   const [showHistory, setShowHistory] = useState(false);
 
@@ -62,12 +73,12 @@ export default function DashboardPage() {
   }
 
   // Redirect admin users to admin dashboard
-  if (user.role === 'admin') {
+  if (user.role === 'Admin') {
     return <Navigate to="/admin/dashboard" replace />;
   }
 
-  const designationVideos = getEmployeeVideos(user.designation);
-  const progress = getProgressForEmployee(user.id);
+  const designationVideos = getEmployeeVideos([]);
+  const progress = getProgressForEmployee(user._id);
 
   const videoProgressMap = new Map<string, EmployeeProgress>();
   progress.forEach((p) => videoProgressMap.set(p.videoId, p));
@@ -95,10 +106,20 @@ export default function DashboardPage() {
             <div className="flex items-center gap-3">
               <div className="hidden md:block text-right">
                 <p className="text-sm font-medium text-foreground-900">{user.name}</p>
-                <p className="text-xs text-foreground-500">{user.designation}</p>
+                <p className="text-xs text-foreground-500">{user.designation?.name || ""}</p>
               </div>
               <div className="w-9 h-9 rounded-full bg-primary-100 flex items-center justify-center">
-                <span className="text-sm font-semibold text-primary-700">{user.avatar}</span>
+                <span className="text-sm font-semibold text-primary-700"> {user.avatar ? (
+                  <img
+                    src={user.avatar}
+                    alt={user.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="text-sm font-semibold text-primary-700">
+                    {getInitials(user.name)}
+                  </span>
+                )}</span>
               </div>
             </div>
             <button
@@ -119,7 +140,7 @@ export default function DashboardPage() {
             Welcome back, {user.name.split(' ')[0]}
           </h1>
           <p className="text-foreground-600 text-sm">
-            {user.designation} Training Program &middot; {completedCount} of {totalCount} videos completed
+            {user.designation.name} Training Program &middot; {completedCount} of {totalCount} videos completed
           </p>
 
           {/* Progress Bar */}
@@ -174,7 +195,7 @@ export default function DashboardPage() {
         {/* Video List */}
         <div>
           <h2 className="font-heading text-xl text-foreground-900 mb-5">
-            {user.designation} Training Videos
+            {user.designation.name} Training Videos
           </h2>
 
           <div className="space-y-3">
@@ -185,11 +206,10 @@ export default function DashboardPage() {
               return (
                 <div
                   key={video.id}
-                  className={`bg-background-50 border rounded-xl p-4 md:p-5 flex items-center gap-4 transition-all ${
-                    status === 'locked'
-                      ? 'border-background-200 opacity-70'
-                      : 'border-background-200 hover:border-primary-300 cursor-pointer'
-                  }`}
+                  className={`bg-background-50 border rounded-xl p-4 md:p-5 flex items-center gap-4 transition-all ${status === 'locked'
+                    ? 'border-background-200 opacity-70'
+                    : 'border-background-200 hover:border-primary-300 cursor-pointer'
+                    }`}
                   onClick={() => {
                     if (status !== 'locked') {
                       navigate(`/learn/${video.id}`);
@@ -197,20 +217,18 @@ export default function DashboardPage() {
                   }}
                 >
                   {/* Sequence number */}
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                    status === 'completed'
-                      ? 'bg-accent-100'
-                      : status === 'unlocked'
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${status === 'completed'
+                    ? 'bg-accent-100'
+                    : status === 'unlocked'
                       ? 'bg-primary-100'
                       : 'bg-background-200'
-                  }`}>
-                    <span className={`text-sm font-semibold ${
-                      status === 'completed'
-                        ? 'text-accent-700'
-                        : status === 'unlocked'
+                    }`}>
+                    <span className={`text-sm font-semibold ${status === 'completed'
+                      ? 'text-accent-700'
+                      : status === 'unlocked'
                         ? 'text-primary-700'
                         : 'text-foreground-400'
-                    }`}>
+                      }`}>
                       {idx + 1}
                     </span>
                   </div>
@@ -291,13 +309,12 @@ export default function DashboardPage() {
                   <div key={video.id} className="bg-background-50 border border-background-200 rounded-xl overflow-hidden">
                     <div className="px-5 py-3 bg-background-100 border-b border-background-200 flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                          prog.status === 'completed'
-                            ? 'bg-accent-100 text-accent-700'
-                            : prog.status === 'unlocked'
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${prog.status === 'completed'
+                          ? 'bg-accent-100 text-accent-700'
+                          : prog.status === 'unlocked'
                             ? 'bg-primary-100 text-primary-700'
                             : 'bg-background-200 text-foreground-500'
-                        }`}>
+                          }`}>
                           {prog.status === 'completed' ? 'Passed' : 'In Progress'}
                         </span>
                         <h3 className="text-sm font-medium text-foreground-900 truncate">{video.title}</h3>
@@ -309,16 +326,14 @@ export default function DashboardPage() {
                         <div key={attempt.attemptNumber} className="px-5 py-3 flex items-center justify-between">
                           <div className="flex items-center gap-4">
                             <span className="text-xs text-foreground-500 w-20">Attempt #{attempt.attemptNumber}</span>
-                            <span className={`text-sm font-semibold ${
-                              attempt.passed ? 'text-accent-600' : 'text-red-500'
-                            }`}>
+                            <span className={`text-sm font-semibold ${attempt.passed ? 'text-accent-600' : 'text-red-500'
+                              }`}>
                               {attempt.score}/{attempt.totalQuestions}
                             </span>
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                              attempt.passed
-                                ? 'bg-accent-50 text-accent-700'
-                                : 'bg-red-50 text-red-600'
-                            }`}>
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${attempt.passed
+                              ? 'bg-accent-50 text-accent-700'
+                              : 'bg-red-50 text-red-600'
+                              }`}>
                               {attempt.passed ? 'Passed' : 'Failed'}
                             </span>
                           </div>

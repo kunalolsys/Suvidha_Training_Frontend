@@ -429,7 +429,7 @@ export default function AdminReportsPage() {
     );
   }, [designationReport, period]);
 
-  if (!user || user.role !== 'admin') {
+  if (!user || user.role !== 'Admin') {
     return <Navigate to="/admin" replace />;
   }
 
@@ -450,7 +450,7 @@ export default function AdminReportsPage() {
           </div>
         </header>
 
-        <div className="max-w-5xl mx-auto px-4 md:px-6 py-6 lg:py-8">
+        <div className=" mx-auto px-4 md:px-6 py-6 lg:py-8">
           {/* Page Header + Period Filter */}
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between mb-8 gap-4">
             <div>

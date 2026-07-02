@@ -1,14 +1,26 @@
-import type { Designation } from './designations';
-
-export interface Employee {
-  id: string;
-  email: string;
+export interface Designation {
+  _id: string;
   name: string;
-  designation: Designation;
-  avatar: string;
-  role: 'employee' | 'admin';
-  storeId: string;
-  storeName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface Store {
+  _id: string;
+  name: string;
+  code: string;
+}
+export interface Employee {
+  _id: string;
+  employeeId: string;
+  name: string;
+  email: string;
+  role: "Admin" | "Employee";
+  designation: Designation | null;
+  store: Store | null;
+  avatar?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export const employees: Employee[] = [

@@ -112,7 +112,7 @@ export default function LearnPage() {
   return (
     <div className="min-h-screen bg-background-50">
       <header className="bg-background-50 border-b border-background-200 sticky top-0 z-20">
-        <div className="max-w-5xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
+        <div className=" mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
           <button
             onClick={() => navigate('/dashboard')}
             className="flex items-center gap-2 text-sm text-foreground-600 hover:text-foreground-900 transition-colors whitespace-nowrap cursor-pointer"
@@ -129,7 +129,7 @@ export default function LearnPage() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 md:px-6 py-6 md:py-10">
+      <main className=" mx-auto px-4 md:px-6 py-6 md:py-10">
         <div className="mb-6">
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary-100 text-primary-700 text-xs font-medium mb-3">
             {video.designation}
