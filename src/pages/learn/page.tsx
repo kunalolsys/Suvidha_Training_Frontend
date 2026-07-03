@@ -1,55 +1,170 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useParams, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { videos as allVideos } from '@/mocks/videos';
-import { questions as allQuestions } from '@/mocks/questions';
-import { getVideoProgress, markVideoCompleted, recordAttempt, unlockNextVideo } from '@/mocks/progressStore';
 import VideoPlayer from './components/VideoPlayer';
 import MCQQuiz from './components/MCQQuiz';
 import QuizResult from './components/QuizResult';
+import { api } from '@/api/api';
+import { API } from '@/api/endpoints';
 
+const getInitials = (name?: string) => {
+  if (!name) return "";
+
+  const parts = name.trim().split(/\s+/);
+
+  if (parts.length === 1) {
+    return parts[0].substring(0, 2).toUpperCase();
+  }
+
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+};
 export default function LearnPage() {
   const { videoId } = useParams<{ videoId: string }>();
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(false)
+  const [video, setVideo] = useState<any | null>(null);
+  const [allVideos, setAllVideos] = useState<any[]>([]);
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [progressList, setProgressList] = useState([]);
 
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [quizPassed, setQuizPassed] = useState<boolean | null>(null);
   const [correctCount, setCorrectCount] = useState(0);
   const [videoCompleted, setVideoCompleted] = useState(false);
-
-  const video = useMemo(() => allVideos.find((v) => v.id === videoId), [videoId]);
-  const videoQuestions = useMemo(
-    () => allQuestions.filter((q) => q.videoId === videoId).sort((a, b) => a.sortOrder - b.sortOrder),
-    [videoId],
-  );
-  const progress = user && videoId ? getVideoProgress(user.id, videoId) : undefined;
-
-  const nextVideo = useMemo(() => {
-    if (!video) return undefined;
-    return allVideos.find(
-      (v) => v.designation === video.designation && v.sortOrder === video.sortOrder + 1,
-    );
-  }, [video]);
-
-  const handleQuizSubmit = useCallback(
-    (answers: Record<string, string>) => {
-      if (!user || !videoId) return;
-      let correct = 0;
-      videoQuestions.forEach((q) => {
-        if (answers[q.id] === q.correctOption) correct += 1;
+  const modalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fetchAllVideos = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get(`${API.VIDEO}/emp-videos`, {
+        designation: user.designation._id
       });
-      setCorrectCount(correct);
+
+      setAllVideos(res.data.videos);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  const fetchVideos = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get(`${API.VIDEO}/${videoId}`);
+      setVideo(res.data.video);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  const fetchQuestions = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get(`${API.QUESTION}/${videoId}`);
+      setQuestions(res.data.questions);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  const fetchProgress = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get(`${API.PROGRESS}/my-dashboard`);
+
+      setProgressList(res.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    fetchVideos();
+    fetchAllVideos();
+    fetchQuestions();
+    fetchProgress();
+
+
+    return () => {
+      if (modalTimerRef.current) {
+        clearTimeout(modalTimerRef.current);
+      }
+    };
+  }, [user, videoId]);
+  const videoQuestions = useMemo(() => {
+    return questions
+      .filter((q) => q.video?._id === videoId)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((q) => ({
+        id: q._id,
+        question: q.question,
+
+        options: q.options.map((opt: any, index: number) => ({
+          id: String.fromCharCode(97 + index), // a,b,c,d,e
+          text: opt.option,
+        })),
+
+        correctOption:
+          q.options.findIndex((o: any) => o.isCorrect) >= 0
+            ? String.fromCharCode(
+              97 + q.options.findIndex((o: any) => o.isCorrect)
+            )
+            : "",
+      }));
+  }, [questions, videoId]);
+
+  const progress = progressList.find(
+    p => p.video._id === videoId
+  );
+  const nextVideo = useMemo(() => {
+    if (!video || allVideos.length === 0) return null;
+
+    return (
+      allVideos.find(
+        (v: any) =>
+          String(v.designation?._id) === String(video.designation?._id) &&
+          v.sortOrder === video.sortOrder + 1 &&
+          v.isActive
+      ) || null
+    );
+  }, [video, allVideos]);
+  const handleQuizSubmit = useCallback(
+    async (answers: Record<string, string>) => {
+      if (!user || !videoId) return;
+
+      let correct = 0;
+
+      videoQuestions.forEach((q) => {
+        if (answers[q.id] === q.correctOption) {
+          correct++;
+        }
+      });
+
       const passed = correct === videoQuestions.length;
+
+      setCorrectCount(correct);
       setQuizPassed(passed);
       setQuizSubmitted(true);
-      recordAttempt(user.id, videoId, correct, videoQuestions.length, answers, passed);
-      if (passed) {
-        markVideoCompleted(user.id, videoId);
-        unlockNextVideo(user.id, videoId);
+
+      try {
+        await api.post(`${API.PROGRESS}/submit-quiz`, {
+          videoId,
+          score: correct,
+          totalQuestions: videoQuestions.length,
+          passed,
+          answers: Object.entries(answers).map(([questionId, selected]) => ({
+            question: questionId,
+            selectedOption: ["a", "b", "c", "d", "e"].indexOf(selected),
+          })),
+        });
+      } catch (err) {
+        console.error(err);
       }
     },
-    [user, videoId, videoQuestions],
+    [user, videoId, videoQuestions]
   );
 
   const handleRetry = useCallback(() => {
@@ -112,7 +227,7 @@ export default function LearnPage() {
   return (
     <div className="min-h-screen bg-background-50">
       <header className="bg-background-50 border-b border-background-200 sticky top-0 z-20">
-        <div className=" mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
           <button
             onClick={() => navigate('/dashboard')}
             className="flex items-center gap-2 text-sm text-foreground-600 hover:text-foreground-900 transition-colors whitespace-nowrap cursor-pointer"
@@ -123,22 +238,22 @@ export default function LearnPage() {
           <div className="flex items-center gap-3">
             <span className="text-sm text-foreground-600 hidden sm:inline">{user.name}</span>
             <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center">
-              <span className="text-xs font-semibold text-primary-700">{user.avatar}</span>
+              <span className="text-xs font-semibold text-primary-700"> {getInitials(user.name)}</span>
             </div>
           </div>
         </div>
       </header>
 
-      <main className=" mx-auto px-4 md:px-6 py-6 md:py-10">
+      <main className="max-w-6xl mx-auto px-4 md:px-6 py-8">
         <div className="mb-6">
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary-100 text-primary-700 text-xs font-medium mb-3">
-            {video.designation}
+            {video.designation ? video.designation.name : ""}
           </span>
           <h1 className="font-heading text-2xl md:text-3xl text-foreground-900 mb-2">{video.title}</h1>
           <div className="flex items-center gap-4 text-sm text-foreground-500">
-            <span className="flex items-center gap-1">
+            {/* <span className="flex items-center gap-1">
               <i className="ri-time-line"></i> {video.duration}
-            </span>
+            </span> */}
             {progress && progress.attempts > 0 && (
               <span className="flex items-center gap-1">
                 <i className="ri-refresh-line"></i> Quiz attempt {progress.attempts + 1}
@@ -151,7 +266,18 @@ export default function LearnPage() {
           veedUrl={video.veedUrl}
           title={video.title}
           completed={videoCompleted}
-          onComplete={() => setVideoCompleted(true)}
+          onComplete={async () => {
+            setVideoCompleted(true);
+
+            try {
+              await api.patch(`${API.PROGRESS}/update-status`, {
+                videoId,
+                status: "unlocked",
+              });
+            } catch (err) {
+              console.error(err);
+            }
+          }}
         />
 
         <div className="mt-10">

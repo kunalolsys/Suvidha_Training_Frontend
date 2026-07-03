@@ -13,6 +13,7 @@
   "dependencies": {
     "@stripe/react-stripe-js": "4.0.2",
     "@supabase/supabase-js": "2.57.4",
+    "@vimeo/player": "^2.30.4",
     "antd": "^6.5.0",
     "axios": "^1.18.1",
     "firebase": "12.0.0",

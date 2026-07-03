@@ -2,7 +2,6 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import AdminSidebar from '@/components/feature/AdminSidebar';
-import { getAllVideos, addVideo, updateVideo, deleteVideo, getNextVideoId } from '@/mocks/videoStore';
 import { api } from '@/api/api';
 import { API } from '@/api/endpoints';
 import { useDebounce } from '@/common/Debounce';
