@@ -7,7 +7,7 @@ const formatRemainingTime = (seconds: number) => {
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 };
 
-export default function VideoPlayer({ veedUrl, title, completed = false, onComplete }: any) {
+export default function VideoPlayer({ videoUrl, title, completed = false, onComplete }: any) {
   const [hasStarted, setHasStarted] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
@@ -18,22 +18,22 @@ export default function VideoPlayer({ veedUrl, title, completed = false, onCompl
   const vimeoPlayerRef = useRef<any>(null); // Kept to programmatically trigger play/pause for Vimeo
 
   // 1. Dynamic Provider Evaluation & Sanitization Engine
-  const isYouTube = veedUrl?.includes('youtube.com') || veedUrl?.includes('youtu.be');
-  const isVimeo = veedUrl?.includes('vimeo.com');
+  const isYouTube = videoUrl?.includes('youtube.com') || videoUrl?.includes('youtu.be');
+  const isVimeo = videoUrl?.includes('vimeo.com');
 
   const embedUrl = (() => {
-    if (!veedUrl) return "";
+    if (!videoUrl) return "";
     try {
       if (isYouTube) {
         const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-        const match = veedUrl.match(regExp);
+        const match = videoUrl.match(regExp);
         const ytId = match && match[2].length === 11 ? match[2] : null;
 
         // UNCHANGED: Your exact original YouTube URL generation string
         return ytId ? `https://www.youtube.com/embed/${ytId}?enablejsapi=1&rel=0&controls=0&disablekb=1` : "";
       }
       if (isVimeo) {
-        const match = veedUrl.match(/(?:vimeo\.com\/|video\/)(\d+)/);
+        const match = videoUrl.match(/(?:vimeo\.com\/|video\/)(\d+)/);
         const vimeoId = match && match[1] ? match[1] : null;
 
         // UPDATED: Added controls=0 to hide the Vimeo control panel
@@ -42,7 +42,7 @@ export default function VideoPlayer({ veedUrl, title, completed = false, onCompl
     } catch (e) {
       console.error("Error formatting URL:", e);
     }
-    return veedUrl;
+    return videoUrl;
   })();
 
   // Click handler for our custom overlay button
