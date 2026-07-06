@@ -2,8 +2,6 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import AdminSidebar from '@/components/feature/AdminSidebar';
-import { getAllVideos } from '@/mocks/videoStore';
-import { getAllQuestions, addQuestion, updateQuestion, deleteQuestion, getNextQuestionId } from '@/mocks/questionStore';
 import { api } from '@/api/api';
 import { API } from '@/api/endpoints';
 import { message, Select } from 'antd';

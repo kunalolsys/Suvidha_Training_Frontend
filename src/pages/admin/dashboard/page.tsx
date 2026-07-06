@@ -1,25 +1,38 @@
 import { useAuth } from '@/hooks/useAuth';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import AdminSidebar from '@/components/feature/AdminSidebar';
-import { getAllEmployees, getEmployeeCount } from '@/mocks/employeeStore';
-import { getAllVideos } from '@/mocks/videoStore';
-import { getAllQuestions } from '@/mocks/questionStore';
-import { getAllProgressForAdmin, getAllEmployeeProgress } from '@/mocks/progressStore';
 import { api } from '@/api/api';
 import { API } from '@/api/endpoints';
-
+import Pagination from '@/common/Pagination';
+import DesignationGrid from '@/common/DesignationCard';
+const getInitials = (name: string) => {
+  return name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+};
 export default function AdminDashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false)
   const [dashboardRecord, setDashboardRecord] = useState(null)
+  const [employeeProgress, setEmployeeProgress] = useState([])
+  const [videosByDesg, setVideosByDesg] = useState([])
   const modalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const fetchRecord = async () => {
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({
+    total: 0,
+    page: 1,
+    limit: 10,
+    totalPages: 1,
+  });
+  const fetchStats = async () => {
     try {
       setLoading(true);
-      const res = await api.get(`${API.REPORT}/dashboard`,);
+      const res = await api.get(`${API.DASHBOARD}/stats`,);
 
       setDashboardRecord(res.data);
 
@@ -29,58 +42,112 @@ export default function AdminDashboardPage() {
       setLoading(false);
     }
   };
+  const fetchEmpProgress = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get(`${API.DASHBOARD}/employee-progress`, {
+        page,
+        limit: pagination.limit,
+      });
+
+      setEmployeeProgress(res.data);
+      setPagination(res.pagination);
+
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  const fetchVideoByDesignation = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get(`${API.DASHBOARD}/videos-by-designation`,);
+
+      setVideosByDesg(res.data);
+
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
   useEffect(() => {
-    fetchRecord();
+    fetchStats();
+    fetchEmpProgress();
+    fetchVideoByDesignation();
     return () => {
       if (modalTimerRef.current) {
         clearTimeout(modalTimerRef.current);
       }
     };
-  }, []);
-  const allProgress = getAllProgressForAdmin();
-  const completedCount = allProgress.filter((p) => p.status === 'completed').length;
-  const totalAttempts = allProgress.reduce((acc, p) => acc + p.attempts, 0);
-
-  const passRate = totalAttempts > 0
-    ? Math.round(
-      (allProgress.filter((p) => p.attemptHistory.some((a) => a.passed)).length /
-        allProgress.filter((p) => p.attempts > 0).length) *
-      100,
-    )
-    : 0;
-
-  const employeeProgressData = getAllEmployeeProgress();
-
-  const designationVideoCounts = useMemo(() => {
-    const vids = getAllVideos();
-    const counts: Record<string, number> = {};
-    vids.forEach((v) => {
-      counts[v.designation] = (counts[v.designation] || 0) + 1;
-    });
-    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  }, [page]);
+  useEffect(() => {
+    setPage(1);
   }, []);
 
-  const designationEmployeeCounts = useMemo(() => {
-    const emps = getAllEmployees();
-    const counts: Record<string, number> = {};
-    emps.forEach((e) => {
-      if (e.role === 'employee') {
-        counts[e.designation] = (counts[e.designation] || 0) + 1;
-      }
-    });
-    return counts;
-  }, []);
+  const designationIcons = {
+    // ─── ACCOUNTS & FINANCE ───────────────────────────────────────
+    "Accounts": "ri-calculator-line",
+    "Auditor": "ri-file-shield-2-line",
+    "Bank Reconcilation": "ri-exchange-funds-line",
+    "Cashier": "ri-hand-coin-line",
+    "Debit/Credit notes": "ri-file-list-3-line",
+    "Outright accounts": "ri-refund-2-line",
+    "Petty Expense": "ri-coins-line",
+    "Purchase invoice": "ri-bill-line",
+    "SOR Accounts": "ri-refund-line",
+    "Stock Reco": "ri-git-commit-line",
 
-  const designationIcons: Record<string, string> = {
-    'Sales': 'ri-line-chart-line',
-    'Operations': 'ri-settings-3-line',
-    'HR': 'ri-user-heart-line',
-    'IT': 'ri-terminal-box-line',
-    'Finance': 'ri-bank-line',
-    'Front Desk': 'ri-customer-service-2-line',
-    'Housekeeping': 'ri-home-gear-line',
-    'Management': 'ri-vip-crown-line',
-    'Kitchen Staff': 'ri-restaurant-line',
+    // ─── RETAIL & VISUAL MERCHANDISING ────────────────────────────
+    "CCE": "ri-customer-service-line",            // Customer Care Executive
+    "CCE (Brand)": "ri-service-line",
+    "Customer Care": "ri-customer-service-2-line",
+    "Promoter": "ri-megaphone-line",
+    "Promoter (Brand)": "ri-award-line",
+    "VM": "ri-t-shirt-air-line",                   // Visual Merchandiser
+
+    // ─── STORE MANAGEMENT & OPERATIONS ────────────────────────────
+    "DM": "ri-building-4-line",                    // District/Department Manager
+    "DM (POS)": "ri-bubble-chart-line",
+    "OM": "ri-briefcase-line",                     // Operations Manager
+    "Operations Head": "ri-briefcase-fill",       // Alternative: 'ri-briefcase-fill'
+    "SM": "ri-store-3-line",                       // Store Manager
+    "Management": "ri-vip-crown-2-line",
+
+    // ─── CRM & ADMIN ──────────────────────────────────────────────
+    "CRM": "ri-shake-hands-line",
+    "Data Entry": "ri-keyboard-line",
+    "HR": "ri-user-shared-line",
+    "HR Head": "ri-user-star-line",
+
+    // ─── TECHNOLOGY (HO & LOCATIONS) ──────────────────────────────
+    "IT (HO)": "ri-computer-line",
+    "IT (Locations)": "ri-router-line",
+    "IT (Warehouse)": "ri-server-line",
+    "IT Head": "ri-terminal-window-line",
+
+    // ─── WAREHOUSE, LOGISTICS & MERCHANDISING ─────────────────────
+    "Head merchandiser": "ri-shirt-line",
+    "Merchandiser": "ri-scissors-line",
+    "PC HO": "ri-hotel-line",                      // Product Coordinator / Procurement
+    "Picker": "ri-hand-heart-line",
+    "Scanning": "ri-barcode-box-line",
+    "Tagger": "ri-price-tag-2-line",
+    "Warehouse Head": "ri-archive-stack-line",
+
+    // ─── SERVICES, FACILITIES & TRADES ────────────────────────────
+    "Driver": "ri-steering-2-line",
+    "Electrician": "ri-flashlight-line",
+    "House Keeping": "ri-home-gear-line",
+    "House Keeping Head": "ri-home-smile-line",
+    "Operator": "ri-equalizer-line",
+    "Security": "ri-shield-user-line",
+    "Services (POS)": "ri-terminal-box-line",
+    "Tailor": "ri-scissors-2-line",
+
+    // ─── DEFAULT FALLBACK ─────────────────────────────────────────
+    "Default": "ri-video-line",
   };
 
   const designationColors: Record<string, string> = {
@@ -123,7 +190,7 @@ export default function AdminDashboardPage() {
     },
     {
       label: 'Completions',
-      value: dashboardRecord.completedVideos,
+      value: dashboardRecord.completions,
       icon: 'ri-checkbox-circle-line',
       color: 'bg-accent-100 text-accent-600',
       path: null,
@@ -137,7 +204,7 @@ export default function AdminDashboardPage() {
     },
     {
       label: 'Avg Pass Rate',
-      value: `${passRate}%`,
+      value: `${dashboardRecord.avgPassRate}%`,
       icon: 'ri-bar-chart-line',
       color: 'bg-secondary-100 text-secondary-600',
       path: null,
@@ -259,49 +326,40 @@ export default function AdminDashboardPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-background-100">
-                  {employeeProgressData
-                    .filter((ep) => ep.employee.role === 'employee')
+                  {employeeProgress
                     .map((ep) => {
-                      const totalVideos = ep.progress.length;
-                      const completed = ep.progress.filter((p) => p.status === 'completed').length;
-                      const attempts = ep.progress.reduce((acc, p) => acc + p.attempts, 0);
-                      const passed = ep.progress.filter(
-                        (p) => p.attemptHistory.length > 0 && p.attemptHistory[p.attemptHistory.length - 1].passed,
-                      ).length;
-                      const personalPassRate = attempts > 0 ? Math.round((passed / ep.progress.filter((p) => p.attempts > 0).length) * 100) : 0;
-
                       return (
-                        <tr key={ep.employee.id} className="hover:bg-background-50/70 transition-colors">
+                        <tr key={ep._id} className="hover:bg-background-50/70 transition-colors">
                           <td className="px-5 py-3">
                             <div className="flex items-center gap-3">
                               <div className="w-9 h-9 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xs font-semibold">
-                                {ep.employee.avatar}
+                                {getInitials(ep.name)}
                               </div>
                               <div>
-                                <p className="text-sm font-medium text-foreground-900">{ep.employee.name}</p>
-                                <p className="text-xs text-foreground-500">{ep.employee.email}</p>
+                                <p className="text-sm font-medium text-foreground-900">{ep.name}</p>
+                                <p className="text-xs text-foreground-500">{ep.email}</p>
                               </div>
                             </div>
                           </td>
                           <td className="px-5 py-3">
-                            <span className="text-xs text-foreground-400 font-mono">{ep.employee.storeId}</span>
-                            <p className="text-sm text-foreground-700">{ep.employee.storeName}</p>
+                            {/* <span className="text-xs text-foreground-400 font-mono">{ep.employee.storeId}</span> */}
+                            <p className="text-sm text-foreground-700">{ep.store}</p>
                           </td>
                           <td className="px-5 py-3">
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-secondary-100 text-secondary-700">
-                              {ep.employee.designation}
+                              {ep.designation}
                             </span>
                           </td>
-                          <td className="px-5 py-3 text-sm text-foreground-700 text-center">{totalVideos}</td>
+                          <td className="px-5 py-3 text-sm text-foreground-700 text-center">{ep.videos}</td>
                           <td className="px-5 py-3 text-sm text-foreground-700 text-center">
-                            <span className={`font-medium ${completed === totalVideos && totalVideos > 0 ? 'text-accent-600' : 'text-foreground-700'}`}>
-                              {completed}/{totalVideos}
+                            <span className={`font-medium ${ep.videos > 0 ? 'text-accent-600' : 'text-foreground-700'}`}>
+                              {ep.completed}
                             </span>
                           </td>
-                          <td className="px-5 py-3 text-sm text-foreground-700 text-center">{attempts}</td>
+                          <td className="px-5 py-3 text-sm text-foreground-700 text-center">{ep.attempts}</td>
                           <td className="px-5 py-3 text-center">
-                            <span className={`text-sm font-medium ${personalPassRate >= 70 ? 'text-accent-600' : personalPassRate >= 40 ? 'text-amber-600' : 'text-red-600'}`}>
-                              {personalPassRate}%
+                            <span className={`text-sm font-medium ${ep.passRateNum >= 70 ? 'text-accent-600' : ep.passRateNum >= 40 ? 'text-amber-600' : 'text-red-600'}`}>
+                              {ep.passRate}
                             </span>
                           </td>
                         </tr>
@@ -309,6 +367,15 @@ export default function AdminDashboardPage() {
                     })}
                 </tbody>
               </table>
+            </div>
+            <div className="border-background-200 bg-background-50 px-6 py-4 shrink-0">
+              <Pagination
+                page={pagination.page}
+                totalPages={pagination.totalPages}
+                total={pagination.total}
+                limit={pagination.limit}
+                onPageChange={setPage}
+              />
             </div>
           </div>
 
@@ -327,39 +394,10 @@ export default function AdminDashboardPage() {
                 <i className="ri-arrow-right-line"></i>
               </button>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {designationVideoCounts.map(([designation, videoCount]) => {
-                const employeeCount = designationEmployeeCounts[designation] || 0;
-                return (
-                  <div
-                    key={designation}
-                    className="bg-background-50 border border-background-200 rounded-xl p-5 hover:border-primary-300 transition-colors"
-                  >
-                    <div className="flex items-start gap-4 mb-4">
-                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${designationColors[designation] || 'bg-accent-100 text-accent-600'}`}>
-                        <i className={`${designationIcons[designation] || 'ri-video-line'} text-xl`}></i>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="text-sm font-medium text-foreground-900 truncate">{designation}</h4>
-                        <p className="text-xs text-foreground-500 mt-0.5">
-                          {employeeCount} {employeeCount === 1 ? 'employee' : 'employees'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="flex-1 bg-background-100 rounded-lg px-3 py-2.5">
-                        <p className="text-lg font-semibold text-foreground-900">{videoCount}</p>
-                        <p className="text-xs text-foreground-500">training videos</p>
-                      </div>
-                      <div className="flex-1 bg-background-100 rounded-lg px-3 py-2.5">
-                        <p className="text-lg font-semibold text-foreground-900">{employeeCount}</p>
-                        <p className="text-xs text-foreground-500">{employeeCount === 1 ? 'employee' : 'employees'}</p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <DesignationGrid
+              videosByDesg={videosByDesg}
+              designationIcons={designationIcons}
+            />
           </div>
         </div>
       </main>

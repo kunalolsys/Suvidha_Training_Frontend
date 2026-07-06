@@ -2,97 +2,83 @@ import { useAuth } from '@/hooks/useAuth';
 import { Navigate } from 'react-router-dom';
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import AdminSidebar from '@/components/feature/AdminSidebar';
-import { getAllEmployees } from '@/mocks/employeeStore';
-import { getAllVideos } from '@/mocks/videoStore';
-import { getAllEmployeeProgress } from '@/mocks/progressStore';
 import { downloadCSV } from '@/utils/csvExport';
-import type { Employee } from '@/mocks/employees';
-import type { EmployeeProgress } from '@/mocks/progress';
+import { api } from '@/api/api';
+import { API } from '@/api/endpoints';
 
 type PeriodLabel = 'Last 30 Days' | 'Last 90 Days' | 'All Time';
-type PeriodValue = '30d' | '90d' | 'all';
+type PeriodValue = '30' | '90' | 'all';
 
 const periods: { label: PeriodLabel; value: PeriodValue }[] = [
-  { label: 'Last 30 Days', value: '30d' },
-  { label: 'Last 90 Days', value: '90d' },
+  { label: 'Last 30 Days', value: '30' },
+  { label: 'Last 90 Days', value: '90' },
   { label: 'All Time', value: 'all' },
 ];
 
-function daysAgo(days: number): Date {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d;
-}
 
-function filterByPeriod(progress: EmployeeProgress[], period: PeriodValue): EmployeeProgress[] {
-  if (period === 'all') return progress;
-  const cutoff = daysAgo(period === '30d' ? 30 : 90);
-  return progress.map((p) => {
-    const filteredHistory = p.attemptHistory.filter((a) => new Date(a.timestamp) >= cutoff);
-    // Recalculate attempts and status based on filtered history
-    const lastPassed = [...filteredHistory].reverse().find((a) => a.passed);
-    const statusFromHistory = lastPassed
-      ? 'completed' as const
-      : filteredHistory.length > 0
-        ? 'unlocked' as const
-        : p.status;
-    return {
-      ...p,
-      attempts: filteredHistory.length,
-      attemptHistory: filteredHistory,
-      status: statusFromHistory,
-    };
-  });
-}
 
-interface StoreReportRow {
-  storeId: string;
-  storeName: string;
-  employeeCount: number;
-  totalAssignments: number;
-  completedCount: number;
-  completionPct: number;
-  bestEmployee: { name: string; avatar: string; pct: number } | null;
-  needsAttention: { name: string; avatar: string; pct: number } | null;
-}
+const designationIcons = {
+  // ─── ACCOUNTS & FINANCE ───────────────────────────────────────
+  "Accounts": "ri-calculator-line",
+  "Auditor": "ri-file-shield-2-line",
+  "Bank Reconcilation": "ri-exchange-funds-line",
+  "Cashier": "ri-hand-coin-line",
+  "Debit/Credit notes": "ri-file-list-3-line",
+  "Outright accounts": "ri-refund-2-line",
+  "Petty Expense": "ri-coins-line",
+  "Purchase invoice": "ri-bill-line",
+  "SOR Accounts": "ri-refund-line",
+  "Stock Reco": "ri-git-commit-line",
 
-interface DesignationReportRow {
-  designation: string;
-  employeeCount: number;
-  totalAssignments: number;
-  completedCount: number;
-  completionPct: number;
-  bestStore: { storeName: string; pct: number } | null;
-  atRiskCount: number;
-}
+  // ─── RETAIL & VISUAL MERCHANDISING ────────────────────────────
+  "CCE": "ri-customer-service-line",            // Customer Care Executive
+  "CCE (Brand)": "ri-service-line",
+  "Customer Care": "ri-customer-service-2-line",
+  "Promoter": "ri-megaphone-line",
+  "Promoter (Brand)": "ri-award-line",
+  "VM": "ri-t-shirt-air-line",                   // Visual Merchandiser
 
-interface AtRiskRow {
-  employee: Employee;
-  stuckCount: number;
-  totalVideos: number;
-  completed: number;
-  completionPct: number;
-  stuckVideoTitles: string[];
-}
+  // ─── STORE MANAGEMENT & OPERATIONS ────────────────────────────
+  "DM": "ri-building-4-line",                    // District/Department Manager
+  "DM (POS)": "ri-bubble-chart-line",
+  "OM": "ri-briefcase-line",                     // Operations Manager
+  "Operations Head": "ri-briefcase-fill",       // Alternative: 'ri-briefcase-fill'
+  "SM": "ri-store-3-line",                       // Store Manager
+  "Management": "ri-vip-crown-2-line",
 
-interface TopPerformerRow {
-  employee: Employee;
-  storeName: string;
-  completed: number;
-  total: number;
-  avgPassRate: number;
-}
+  // ─── CRM & ADMIN ──────────────────────────────────────────────
+  "CRM": "ri-shake-hands-line",
+  "Data Entry": "ri-keyboard-line",
+  "HR": "ri-user-shared-line",
+  "HR Head": "ri-user-star-line",
 
-const designationIcons: Record<string, string> = {
-  'Sales': 'ri-line-chart-line',
-  'Operations': 'ri-settings-3-line',
-  'HR': 'ri-user-heart-line',
-  'IT': 'ri-terminal-box-line',
-  'Finance': 'ri-bank-line',
-  'Front Desk': 'ri-customer-service-2-line',
-  'Housekeeping': 'ri-home-gear-line',
-  'Management': 'ri-vip-crown-line',
-  'Kitchen Staff': 'ri-restaurant-line',
+  // ─── TECHNOLOGY (HO & LOCATIONS) ──────────────────────────────
+  "IT (HO)": "ri-computer-line",
+  "IT (Locations)": "ri-router-line",
+  "IT (Warehouse)": "ri-server-line",
+  "IT Head": "ri-terminal-window-line",
+
+  // ─── WAREHOUSE, LOGISTICS & MERCHANDISING ─────────────────────
+  "Head merchandiser": "ri-shirt-line",
+  "Merchandiser": "ri-scissors-line",
+  "PC HO": "ri-hotel-line",                      // Product Coordinator / Procurement
+  "Picker": "ri-hand-heart-line",
+  "Scanning": "ri-barcode-box-line",
+  "Tagger": "ri-price-tag-2-line",
+  "Warehouse Head": "ri-archive-stack-line",
+
+  // ─── SERVICES, FACILITIES & TRADES ────────────────────────────
+  "Driver": "ri-steering-2-line",
+  "Electrician": "ri-flashlight-line",
+  "House Keeping": "ri-home-gear-line",
+  "House Keeping Head": "ri-home-smile-line",
+  "Operator": "ri-equalizer-line",
+  "Security": "ri-shield-user-line",
+  "Services (POS)": "ri-terminal-box-line",
+  "Tailor": "ri-scissors-2-line",
+
+  // ─── DEFAULT FALLBACK ─────────────────────────────────────────
+  "Default": "ri-video-line",
 };
 
 const designationColors: Record<string, string> = {
@@ -121,35 +107,117 @@ function completionBg(pct: number): string {
 
 export default function AdminReportsPage() {
   const { user } = useAuth();
-  const [period, setPeriod] = useState<PeriodValue>('30d');
+  const [period, setPeriod] = useState<PeriodValue>('30');
   const [performanceView, setPerformanceView] = useState<'designation' | 'store'>('designation');
   const [highlightedSection, setHighlightedSection] = useState<string | null>(null);
 
   const breakdownRef = useRef<HTMLDivElement>(null);
   const atRiskRef = useRef<HTMLDivElement>(null);
   const topPerfRef = useRef<HTMLDivElement>(null);
+  const [loading, setLoading] = useState(false)
+  const [loader, setLoader] = useState(false)
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [stats, setStats] = useState({
+    overallCompletion: "0",
+    employeesAt100: "0/0",
+    firstTryPassRate: "0",
+    totalQuizAttempts: 0,
+    needAttention: 0
+  })
+  const [performanceBreakdown, setPerformanceBreakdown] = useState([])
+  const [atRiskEmployee, setAtRiskEmployee] = useState([])
+  const [topPerformer, setTopPerformer] = useState([])
+  const modalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const allVideos = useMemo(() => getAllVideos(), []);
-  const allEmployees = useMemo(() => getAllEmployees().filter((e) => e.role === 'employee'), []);
-  const rawEmployeeProgress = useMemo(() => getAllEmployeeProgress(), []);
+  const fetchStats = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get(`${API.REPORT}/stats`, {
+        period
+      });
 
+      setStats(res.data);
+
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  const fetchPerformanceBreakdown = async (currentView: any) => {
+    try {
+      setLoader(true);
+      const endpoint = currentView === "designation" ? "by-designation" : "by-store";
+
+      // FIX: Pass params correctly inside the configuration object
+      const res = await api.get(`${API.REPORT}/${endpoint}`, {
+        period
+      });
+
+      if (res && res.data) {
+        setPerformanceBreakdown(res.data);
+      }
+    } catch (err) {
+      console.error("Error fetching performance breakdown:", err);
+    } finally {
+      setLoader(false);
+    }
+  };
+
+  const fetchRiskemployee = async () => {
+    try {
+      setLoading(true);
+      // FIX: Pass params correctly inside the configuration object
+      const res = await api.get(`${API.REPORT}/at-risk`, {
+        period
+      });
+
+      if (res && res.data) {
+        setAtRiskEmployee(res.data);
+      }
+    } catch (err) {
+      console.error("Error fetching risk employees:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchTopPerformer = async () => {
+    try {
+      setLoading(true);
+      // FIX: Pass params correctly inside the configuration object
+      const res = await api.get(`${API.REPORT}/top-performers`, {
+        period
+      });
+
+      if (res && res.data) {
+        setTopPerformer(res.data);
+      }
+    } catch (err) {
+      console.error("Error fetching top performers:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- SINGLE COMBINED EFFECT FOR INITIAL/PERIOD DATA SEEDING ---
   useEffect(() => {
+    fetchStats();
+    fetchRiskemployee();
+    fetchTopPerformer();
     return () => {
-      if (highlightTimerRef.current) {
-        clearTimeout(highlightTimerRef.current);
+      if (modalTimerRef.current) {
+        clearTimeout(modalTimerRef.current);
       }
     };
-  }, []);
+  }, [period]);
 
-  const employeeProgress = useMemo(
-    () =>
-      rawEmployeeProgress.map((ep) => ({
-        employee: ep.employee,
-        progress: filterByPeriod(ep.progress, period),
-      })),
-    [rawEmployeeProgress, period],
-  );
+  // --- EFFECT FOR DYNAMIC TABLE VIEWS ---
+  useEffect(() => {
+    if (performanceView) {
+      fetchPerformanceBreakdown(performanceView);
+    }
+  }, [performanceView, period]);
 
   function scrollToSection(ref: React.RefObject<HTMLDivElement | null>, sectionId: string) {
     ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -161,273 +229,6 @@ export default function AdminReportsPage() {
       setHighlightedSection((prev) => (prev === sectionId ? null : prev));
     }, 2500);
   }
-
-  // ---- Store Report ----
-  const storeReport = useMemo((): StoreReportRow[] => {
-    const storeMap = new Map<string, { storeId: string; storeName: string; employees: { emp: Employee; progress: EmployeeProgress[] }[] }>();
-    employeeProgress.forEach((ep) => {
-      const sid = ep.employee.storeId;
-      if (!storeMap.has(sid)) {
-        storeMap.set(sid, { storeId: sid, storeName: ep.employee.storeName, employees: [] });
-      }
-      storeMap.get(sid)!.employees.push({ emp: ep.employee, progress: ep.progress });
-    });
-
-    return Array.from(storeMap.values())
-      .map((store) => {
-        let totalAssignments = 0;
-        let completedCount = 0;
-        const empPcts: { name: string; avatar: string; pct: number }[] = [];
-
-        store.employees.forEach(({ emp, progress }) => {
-          progress.forEach((p) => {
-            totalAssignments++;
-            if (p.status === 'completed') completedCount++;
-          });
-          const empTotal = progress.length;
-          const empCompleted = progress.filter((p) => p.status === 'completed').length;
-          empPcts.push({
-            name: emp.name,
-            avatar: emp.avatar,
-            pct: empTotal > 0 ? Math.round((empCompleted / empTotal) * 100) : 0,
-          });
-        });
-
-        const sorted = [...empPcts].sort((a, b) => b.pct - a.pct);
-        return {
-          storeId: store.storeId,
-          storeName: store.storeName,
-          employeeCount: store.employees.length,
-          totalAssignments,
-          completedCount,
-          completionPct: totalAssignments > 0 ? Math.round((completedCount / totalAssignments) * 100) : 0,
-          bestEmployee: sorted.length > 0 ? sorted[0] : null,
-          needsAttention:
-            sorted.length > 0 && sorted[sorted.length - 1].pct < 50
-              ? sorted[sorted.length - 1]
-              : null,
-        };
-      })
-      .sort((a, b) => a.storeName.localeCompare(b.storeName));
-  }, [employeeProgress]);
-
-  // ---- At-Risk Employees ----
-  const atRiskEmployees = useMemo((): AtRiskRow[] => {
-    const rows: AtRiskRow[] = [];
-    employeeProgress.forEach((ep) => {
-      const stuck = ep.progress.filter((p) => p.status !== 'completed' && p.attempts > 0);
-      if (stuck.length > 0) {
-        const total = ep.progress.length;
-        const completed = ep.progress.filter((p) => p.status === 'completed').length;
-        rows.push({
-          employee: ep.employee,
-          stuckCount: stuck.length,
-          totalVideos: total,
-          completed,
-          completionPct: total > 0 ? Math.round((completed / total) * 100) : 0,
-          stuckVideoTitles: stuck.map((s) => {
-            const vid = allVideos.find((v) => v.id === s.videoId);
-            return vid ? vid.title : s.videoId;
-          }),
-        });
-      }
-    });
-    return rows.sort((a, b) => a.completionPct - b.completionPct);
-  }, [employeeProgress, allVideos]);
-
-  // ---- Top Performers ----
-  const topPerformers = useMemo((): TopPerformerRow[] => {
-    return employeeProgress
-      .filter((ep) => {
-        const total = ep.progress.length;
-        const completed = ep.progress.filter((p) => p.status === 'completed').length;
-        return total > 0 && completed === total;
-      })
-      .map((ep) => {
-        const total = ep.progress.length;
-        const attemptsWithHistory = ep.progress.filter((p) => p.attemptHistory.length > 0);
-        const sumPassRate = attemptsWithHistory.reduce((acc, p) => {
-          const last = p.attemptHistory[p.attemptHistory.length - 1];
-          return acc + (last?.passed ? 1 : 0);
-        }, 0);
-        return {
-          employee: ep.employee,
-          storeName: ep.employee.storeName,
-          completed: total,
-          total,
-          avgPassRate:
-            attemptsWithHistory.length > 0
-              ? Math.round((sumPassRate / attemptsWithHistory.length) * 100)
-              : 0,
-        };
-      })
-      .sort((a, b) => b.avgPassRate - a.avgPassRate);
-  }, [employeeProgress]);
-
-  // ---- Designation Report (depends on atRiskEmployees, must come after) ----
-  const designationReport = useMemo((): DesignationReportRow[] => {
-    const desMap = new Map<string, {
-      employees: { emp: Employee; progress: EmployeeProgress[] }[];
-      stores: Map<string, { completed: number; total: number }>;
-      atRisk: number;
-    }>();
-
-    employeeProgress.forEach((ep) => {
-      const des = ep.employee.designation;
-      if (!desMap.has(des)) {
-        desMap.set(des, { employees: [], stores: new Map(), atRisk: 0 });
-      }
-      const entry = desMap.get(des)!;
-      entry.employees.push({ emp: ep.employee, progress: ep.progress });
-
-      const sid = ep.employee.storeId;
-      if (!entry.stores.has(sid)) {
-        entry.stores.set(sid, { completed: 0, total: 0 });
-      }
-      const storeStats = entry.stores.get(sid)!;
-      ep.progress.forEach((p) => {
-        storeStats.total++;
-        if (p.status === 'completed') storeStats.completed++;
-      });
-    });
-
-    const atRiskEmpIds = new Set(atRiskEmployees.map((r) => r.employee.id));
-
-    return Array.from(desMap.entries())
-      .map(([designation, data]) => {
-        let totalAssignments = 0;
-        let completedCount = 0;
-        data.employees.forEach(({ progress }) => {
-          progress.forEach((p) => {
-            totalAssignments++;
-            if (p.status === 'completed') completedCount++;
-          });
-        });
-
-        let atRiskCount = 0;
-        data.employees.forEach(({ emp }) => {
-          if (atRiskEmpIds.has(emp.id)) atRiskCount++;
-        });
-
-        let bestStore: { storeName: string; pct: number } | null = null;
-        data.stores.forEach((stats, storeId) => {
-          const pct = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
-          if (!bestStore || pct > bestStore.pct) {
-            const emp = data.employees.find((e) => e.emp.storeId === storeId);
-            bestStore = { storeName: emp?.emp.storeName ?? storeId, pct };
-          }
-        });
-
-        return {
-          designation,
-          employeeCount: data.employees.length,
-          totalAssignments,
-          completedCount,
-          completionPct: totalAssignments > 0 ? Math.round((completedCount / totalAssignments) * 100) : 0,
-          bestStore,
-          atRiskCount,
-        };
-      })
-      .sort((a, b) => b.completionPct - a.completionPct);
-  }, [employeeProgress, atRiskEmployees]);
-
-  // ---- KPI Stats ----
-  const kpiStats = useMemo(() => {
-    let totalAssignments = 0;
-    let totalCompleted = 0;
-    let totalAttempts = 0;
-    let totalPassedFirstTry = 0;
-    let totalWithAttempts = 0;
-
-    const allFilteredProgress = employeeProgress.flatMap((ep) => ep.progress);
-    allFilteredProgress.forEach((p) => {
-      totalAssignments++;
-      if (p.status === 'completed') totalCompleted++;
-      totalAttempts += p.attempts;
-      if (p.attemptHistory.length > 0) {
-        totalWithAttempts++;
-        if (p.attemptHistory[0].passed) totalPassedFirstTry++;
-      }
-    });
-
-    return {
-      overallCompletionPct: totalAssignments > 0 ? Math.round((totalCompleted / totalAssignments) * 100) : 0,
-      employeesAt100: topPerformers.length,
-      totalEmployees: allEmployees.length,
-      totalAttempts,
-      firstTryPassRate: totalWithAttempts > 0 ? Math.round((totalPassedFirstTry / totalWithAttempts) * 100) : 0,
-      atRiskCount: atRiskEmployees.length,
-    };
-  }, [employeeProgress, allEmployees, topPerformers, atRiskEmployees]);
-
-  // ---- CSV Export Handlers ----
-  const exportStoreReport = useCallback(() => {
-    downloadCSV(
-      `store-performance-${period}.csv`,
-      ['Store ID', 'Store Name', 'Employees', 'Total Assignments', 'Completed', 'Completion %', 'Top Employee', 'Top Employee %', 'Needs Attention', 'At-Risk %'],
-      storeReport.map((s) => [
-        s.storeId,
-        s.storeName,
-        String(s.employeeCount),
-        String(s.totalAssignments),
-        String(s.completedCount),
-        `${s.completionPct}%`,
-        s.bestEmployee?.name ?? '',
-        s.bestEmployee ? `${s.bestEmployee.pct}%` : '',
-        s.needsAttention?.name ?? '',
-        s.needsAttention ? `${s.needsAttention.pct}%` : '',
-      ]),
-    );
-  }, [storeReport, period]);
-
-  const exportAtRisk = useCallback(() => {
-    downloadCSV(
-      `at-risk-employees-${period}.csv`,
-      ['Employee Name', 'Store', 'Designation', 'Completed', 'Total Videos', 'Completion %', 'Stuck Quizzes', 'Stuck Video Titles'],
-      atRiskEmployees.map((r) => [
-        r.employee.name,
-        r.employee.storeName,
-        r.employee.designation,
-        String(r.completed),
-        String(r.totalVideos),
-        `${r.completionPct}%`,
-        String(r.stuckCount),
-        r.stuckVideoTitles.join('; '),
-      ]),
-    );
-  }, [atRiskEmployees, period]);
-
-  const exportTopPerformers = useCallback(() => {
-    downloadCSV(
-      `top-performers-${period}.csv`,
-      ['Employee Name', 'Store', 'Designation', 'Videos Completed', 'Total Videos', 'First-Try Pass Rate'],
-      topPerformers.map((r) => [
-        r.employee.name,
-        r.storeName,
-        r.employee.designation,
-        String(r.completed),
-        String(r.total),
-        `${r.avgPassRate}%`,
-      ]),
-    );
-  }, [topPerformers, period]);
-
-  const exportDesignationReport = useCallback(() => {
-    downloadCSV(
-      `designation-performance-${period}.csv`,
-      ['Designation', 'Employees', 'Total Assignments', 'Completed', 'Completion %', 'Best Store', 'Best Store %', 'At-Risk Count'],
-      designationReport.map((d) => [
-        d.designation,
-        String(d.employeeCount),
-        String(d.totalAssignments),
-        String(d.completedCount),
-        `${d.completionPct}%`,
-        d.bestStore?.storeName ?? '',
-        d.bestStore ? `${d.bestStore.pct}%` : '',
-        String(d.atRiskCount),
-      ]),
-    );
-  }, [designationReport, period]);
 
   if (!user || user.role !== 'Admin') {
     return <Navigate to="/admin" replace />;
@@ -462,11 +263,10 @@ export default function AdminReportsPage() {
                 <button
                   key={p.value}
                   onClick={() => setPeriod(p.value)}
-                  className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap cursor-pointer ${
-                    period === p.value
-                      ? 'bg-background-50 text-foreground-900'
-                      : 'text-foreground-500 hover:text-foreground-700'
-                  }`}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap cursor-pointer ${period === p.value
+                    ? 'bg-background-50 text-foreground-900'
+                    : 'text-foreground-500 hover:text-foreground-700'
+                    }`}
                 >
                   {p.label}
                 </button>
@@ -476,6 +276,7 @@ export default function AdminReportsPage() {
 
           {/* ---- KPI Summary Cards ---- */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-10">
+            {/* ─── CARD 1: OVERALL COMPLETION ─── */}
             <div
               onClick={() => scrollToSection(breakdownRef, 'breakdown')}
               className="bg-background-50 border border-background-200 rounded-xl p-4 md:p-5 cursor-pointer hover:border-primary-300 hover:bg-background-100/50 transition-all group"
@@ -483,9 +284,15 @@ export default function AdminReportsPage() {
               <div className="w-9 h-9 rounded-xl bg-primary-100 flex items-center justify-center mb-3 group-hover:bg-primary-200 transition-colors">
                 <i className="ri-pie-chart-line text-lg text-primary-600"></i>
               </div>
-              <p className="text-2xl font-semibold text-foreground-900">{kpiStats.overallCompletionPct}%</p>
+              {loading ? (
+                <div className="h-8 w-16 bg-background-200 rounded animate-pulse mb-1"></div>
+              ) : (
+                <p className="text-2xl font-semibold text-foreground-900">{stats.overallCompletion}</p>
+              )}
               <p className="text-xs text-foreground-500 mt-0.5">Overall Completion</p>
             </div>
+
+            {/* ─── CARD 2: EMPLOYEES AT 100 ─── */}
             <div
               onClick={() => scrollToSection(topPerfRef, 'topperf')}
               className="bg-background-50 border border-background-200 rounded-xl p-4 md:p-5 cursor-pointer hover:border-accent-300 hover:bg-background-100/50 transition-all group"
@@ -493,11 +300,15 @@ export default function AdminReportsPage() {
               <div className="w-9 h-9 rounded-xl bg-accent-100 flex items-center justify-center mb-3 group-hover:bg-accent-200 transition-colors">
                 <i className="ri-trophy-line text-lg text-accent-600"></i>
               </div>
-              <p className="text-2xl font-semibold text-foreground-900">
-                {kpiStats.employeesAt100}<span className="text-sm font-normal text-foreground-500">/{kpiStats.totalEmployees}</span>
-              </p>
-              <p className="text-xs text-foreground-500 mt-0.5">Employees at 100%</p>
+              {loading ? (
+                <div className="h-8 w-20 bg-background-200 rounded animate-pulse mb-1"></div>
+              ) : (
+                <p className="text-2xl font-semibold text-foreground-900">{stats.employeesAt100}</p>
+              )}
+              <p className="text-xs text-foreground-500 mt-0.5">Employees at 100</p>
             </div>
+
+            {/* ─── CARD 3: FIRST-TRY PASS RATE ─── */}
             <div
               onClick={() => scrollToSection(breakdownRef, 'breakdown')}
               className="bg-background-50 border border-background-200 rounded-xl p-4 md:p-5 cursor-pointer hover:border-secondary-300 hover:bg-background-100/50 transition-all group"
@@ -505,9 +316,15 @@ export default function AdminReportsPage() {
               <div className="w-9 h-9 rounded-xl bg-secondary-100 flex items-center justify-center mb-3 group-hover:bg-secondary-200 transition-colors">
                 <i className="ri-check-double-line text-lg text-secondary-600"></i>
               </div>
-              <p className="text-2xl font-semibold text-foreground-900">{kpiStats.firstTryPassRate}%</p>
+              {loading ? (
+                <div className="h-8 w-16 bg-background-200 rounded animate-pulse mb-1"></div>
+              ) : (
+                <p className="text-2xl font-semibold text-foreground-900">{stats.firstTryPassRate}</p>
+              )}
               <p className="text-xs text-foreground-500 mt-0.5">First-Try Pass Rate</p>
             </div>
+
+            {/* ─── CARD 4: TOTAL QUIZ ATTEMPTS ─── */}
             <div
               onClick={() => scrollToSection(breakdownRef, 'breakdown')}
               className="bg-background-50 border border-background-200 rounded-xl p-4 md:p-5 cursor-pointer hover:border-amber-300 hover:bg-background-100/50 transition-all group"
@@ -515,9 +332,15 @@ export default function AdminReportsPage() {
               <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center mb-3 group-hover:bg-amber-200 transition-colors">
                 <i className="ri-refresh-line text-lg text-amber-600"></i>
               </div>
-              <p className="text-2xl font-semibold text-foreground-900">{kpiStats.totalAttempts}</p>
+              {loading ? (
+                <div className="h-8 w-12 bg-background-200 rounded animate-pulse mb-1"></div>
+              ) : (
+                <p className="text-2xl font-semibold text-foreground-900">{stats.totalQuizAttempts}</p>
+              )}
               <p className="text-xs text-foreground-500 mt-0.5">Total Quiz Attempts</p>
             </div>
+
+            {/* ─── CARD 5: NEED ATTENTION ─── */}
             <div
               onClick={() => scrollToSection(atRiskRef, 'atrisk')}
               className="bg-background-50 border border-background-200 rounded-xl p-4 md:p-5 cursor-pointer hover:border-red-300 hover:bg-background-100/50 transition-all group"
@@ -525,7 +348,11 @@ export default function AdminReportsPage() {
               <div className="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center mb-3 group-hover:bg-red-200 transition-colors">
                 <i className="ri-alert-line text-lg text-red-600"></i>
               </div>
-              <p className="text-2xl font-semibold text-red-600">{kpiStats.atRiskCount}</p>
+              {loading ? (
+                <div className="h-8 w-12 bg-background-200 rounded animate-pulse mb-1"></div>
+              ) : (
+                <p className="text-2xl font-semibold text-red-600">{stats.needAttention}</p>
+              )}
               <p className="text-xs text-foreground-500 mt-0.5">Need Attention</p>
             </div>
           </div>
@@ -548,37 +375,34 @@ export default function AdminReportsPage() {
                 <div className="flex items-center gap-1 bg-background-200/70 rounded-full p-1">
                   <button
                     onClick={() => setPerformanceView('designation')}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap cursor-pointer ${
-                      performanceView === 'designation'
-                        ? 'bg-background-50 text-foreground-900'
-                        : 'text-foreground-500 hover:text-foreground-700'
-                    }`}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap cursor-pointer ${performanceView === 'designation'
+                      ? 'bg-background-50 text-foreground-900'
+                      : 'text-foreground-500 hover:text-foreground-700'
+                      }`}
                   >
                     By Designation
                   </button>
                   <button
                     onClick={() => setPerformanceView('store')}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap cursor-pointer ${
-                      performanceView === 'store'
-                        ? 'bg-background-50 text-foreground-900'
-                        : 'text-foreground-500 hover:text-foreground-700'
-                    }`}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap cursor-pointer ${performanceView === 'store'
+                      ? 'bg-background-50 text-foreground-900'
+                      : 'text-foreground-500 hover:text-foreground-700'
+                      }`}
                   >
                     By Store
                   </button>
                 </div>
               </div>
-              <button
+              {/* <button
                 onClick={performanceView === 'designation' ? exportDesignationReport : exportStoreReport}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-foreground-500 hover:text-foreground-700 hover:bg-background-200/70 transition-colors cursor-pointer whitespace-nowrap"
                 title="Download CSV"
               >
                 <i className="ri-download-line text-sm"></i>
                 Export
-              </button>
+              </button> */}
             </div>
 
-            {/* Designation View */}
             {performanceView === 'designation' && (
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
@@ -592,7 +416,7 @@ export default function AdminReportsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-background-100">
-                    {designationReport.map((des) => (
+                    {Array.isArray(performanceBreakdown) && performanceBreakdown.length > 0 && performanceBreakdown.map((des) => (
                       <tr key={des.designation} className="hover:bg-background-50/70 transition-colors">
                         <td className="px-5 py-3">
                           <div className="flex items-center gap-2.5">
@@ -602,13 +426,13 @@ export default function AdminReportsPage() {
                             <p className="text-sm font-medium text-foreground-900">{des.designation}</p>
                           </div>
                         </td>
-                        <td className="px-5 py-3 text-sm text-foreground-700 text-center">{des.employeeCount}</td>
+                        <td className="px-5 py-3 text-sm text-foreground-700 text-center">{des.employees}</td>
                         <td className="px-5 py-3 text-center">
                           <div className="flex items-center justify-center gap-2">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${completionBg(des.completionPct)}`}>
                               {des.completionPct}%
                             </span>
-                            <span className="text-xs text-foreground-400">{des.completedCount}/{des.totalAssignments}</span>
+                            <span className="text-xs text-foreground-400">{des.completionFrac}</span>
                           </div>
                         </td>
                         <td className="px-5 py-3">
@@ -618,8 +442,8 @@ export default function AdminReportsPage() {
                                 <i className="ri-store-2-line text-xs text-accent-600"></i>
                               </div>
                               <div className="min-w-0">
-                                <p className="text-sm text-foreground-700 truncate">{des.bestStore.storeName}</p>
-                                <p className="text-xs text-accent-600">{des.bestStore.pct}%</p>
+                                <p className="text-sm text-foreground-700 truncate">{des.bestStore}</p>
+                                <p className="text-xs text-accent-600">{des.bestStorePct}</p>
                               </div>
                             </div>
                           ) : (
@@ -627,9 +451,9 @@ export default function AdminReportsPage() {
                           )}
                         </td>
                         <td className="px-5 py-3 text-center">
-                          {des.atRiskCount > 0 ? (
+                          {des.atRisk > 0 ? (
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                              {des.atRiskCount}
+                              {des.atRisk}
                             </span>
                           ) : (
                             <span className="text-xs text-foreground-400">0</span>
@@ -642,7 +466,6 @@ export default function AdminReportsPage() {
               </div>
             )}
 
-            {/* Store View */}
             {performanceView === 'store' && (
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
@@ -651,12 +474,12 @@ export default function AdminReportsPage() {
                       <th className="px-5 py-2.5 text-xs font-semibold text-foreground-500 uppercase tracking-wider">Store</th>
                       <th className="px-5 py-2.5 text-xs font-semibold text-foreground-500 uppercase tracking-wider text-center">Employees</th>
                       <th className="px-5 py-2.5 text-xs font-semibold text-foreground-500 uppercase tracking-wider text-center">Completion</th>
-                      <th className="px-5 py-2.5 text-xs font-semibold text-foreground-500 uppercase tracking-wider">Top Employee</th>
-                      <th className="px-5 py-2.5 text-xs font-semibold text-foreground-500 uppercase tracking-wider">Needs Attention</th>
+                      <th className="px-5 py-2.5 text-xs font-semibold text-foreground-500 uppercase tracking-wider">Total Employee</th>
+                      {/* <th className="px-5 py-2.5 text-xs font-semibold text-foreground-500 uppercase tracking-wider">Needs Attention</th> */}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-background-100">
-                    {storeReport.map((store) => (
+                    {performanceBreakdown.map((store) => (
                       <tr key={store.storeId} className="hover:bg-background-50/70 transition-colors">
                         <td className="px-5 py-3">
                           <div className="flex items-center gap-2.5">
@@ -664,50 +487,42 @@ export default function AdminReportsPage() {
                               <i className="ri-store-2-line text-sm text-foreground-500"></i>
                             </div>
                             <div>
-                              <p className="text-sm font-medium text-foreground-900">{store.storeName}</p>
-                              <p className="text-xs text-foreground-400 font-mono">{store.storeId}</p>
+                              <p className="text-sm font-medium text-foreground-900">{store.store}</p>
+                              <p className="text-xs text-foreground-400 font-mono">{store.storeCode}</p>
                             </div>
                           </div>
                         </td>
-                        <td className="px-5 py-3 text-sm text-foreground-700 text-center">{store.employeeCount}</td>
+                        <td className="px-5 py-3 text-sm text-foreground-700 text-center">{store.employees}</td>
                         <td className="px-5 py-3 text-center">
                           <div className="flex items-center justify-center gap-2">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${completionBg(store.completionPct)}`}>
                               {store.completionPct}%
                             </span>
-                            <span className="text-xs text-foreground-400">{store.completedCount}/{store.totalAssignments}</span>
+                            <span className="text-xs text-foreground-400">{store.completionFrac}</span>
                           </div>
                         </td>
                         <td className="px-5 py-3">
-                          {store.bestEmployee ? (
+                          {store.totalAttempts ? (
                             <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-full bg-accent-100 text-accent-700 flex items-center justify-center text-xs font-semibold flex-shrink-0">
-                                {store.bestEmployee.avatar}
-                              </div>
                               <div className="min-w-0">
-                                <p className="text-sm text-foreground-700 truncate">{store.bestEmployee.name}</p>
-                                <p className="text-xs text-accent-600">{store.bestEmployee.pct}%</p>
+                                <p className="text-sm text-foreground-700 truncate">{store.totalAttempts}</p>
                               </div>
                             </div>
                           ) : (
                             <span className="text-xs text-foreground-400">—</span>
                           )}
                         </td>
-                        <td className="px-5 py-3">
-                          {store.needsAttention ? (
+                        {/* <td className="px-5 py-3">
+                          {store.atRisk ? (
                             <div className="flex items-center gap-2">
                               <div className="w-7 h-7 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-xs font-semibold flex-shrink-0">
-                                {store.needsAttention.avatar}
-                              </div>
-                              <div className="min-w-0">
-                                <p className="text-sm text-foreground-700 truncate">{store.needsAttention.name}</p>
-                                <p className="text-xs text-red-600">{store.needsAttention.pct}%</p>
+                                {store.atRisk}
                               </div>
                             </div>
                           ) : (
                             <span className="text-xs text-foreground-400">—</span>
                           )}
-                        </td>
+                        </td> */}
                       </tr>
                     ))}
                   </tbody>
@@ -718,7 +533,6 @@ export default function AdminReportsPage() {
 
           {/* ---- Two-Column: At-Risk + Top Performers ---- */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
-            {/* At-Risk Employees */}
             <div
               ref={atRiskRef}
               className={`bg-background-50 border border-background-200 rounded-xl overflow-hidden transition-all duration-500 ${highlightedSection === 'atrisk' ? 'ring-2 ring-red-300 border-red-300' : ''}`}
@@ -729,9 +543,9 @@ export default function AdminReportsPage() {
                   <p className="text-xs text-foreground-500 mt-0.5">Staff who have failed quizzes and need intervention</p>
                 </div>
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                  {atRiskEmployees.length}
+                  {atRiskEmployee.length}
                 </span>
-                {atRiskEmployees.length > 0 && (
+                {/* {atRiskEmployee.length > 0 && (
                   <button
                     onClick={exportAtRisk}
                     className="ml-2 inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-foreground-500 hover:text-foreground-700 hover:bg-background-200/70 transition-colors cursor-pointer whitespace-nowrap"
@@ -739,9 +553,9 @@ export default function AdminReportsPage() {
                   >
                     <i className="ri-download-line text-xs"></i>
                   </button>
-                )}
+                )} */}
               </div>
-              {atRiskEmployees.length === 0 ? (
+              {atRiskEmployee.length === 0 ? (
                 <div className="px-5 py-10 text-center">
                   <div className="w-12 h-12 rounded-xl bg-accent-100 flex items-center justify-center mx-auto mb-3">
                     <i className="ri-emotion-happy-line text-xl text-accent-600"></i>
@@ -751,45 +565,54 @@ export default function AdminReportsPage() {
                 </div>
               ) : (
                 <div className="divide-y divide-background-100">
-                  {atRiskEmployees.slice(0, 6).map((row) => (
-                    <div key={row.employee.id} className="px-5 py-3.5 flex items-start gap-3 hover:bg-background-50/70 transition-colors">
+                  {atRiskEmployee.slice(0, 6).map((row) => (
+                    <div key={row._id} className="px-5 py-3.5 flex items-start gap-3 hover:bg-background-50/70 transition-colors">
                       <div className="w-9 h-9 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-xs font-semibold flex-shrink-0">
-                        {row.employee.avatar}
+                        {/* Generates initials (e.g., "DS" for "DEEPAK SAROHA") */}
+                        {row.name ? row.name.split(' ').map(n => n[0]).join('').slice(0, 2) : ''}
                       </div>
+
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
-                          <p className="text-sm font-medium text-foreground-900 truncate">{row.employee.name}</p>
-                          <span className="text-xs text-foreground-400 flex-shrink-0">{row.employee.storeId}</span>
+                          <p className="text-sm font-medium text-foreground-900 truncate">{row.name}</p>
+                          <span className="text-xs text-foreground-400 flex-shrink-0">{row.store}</span>
                         </div>
+
                         <p className="text-xs text-foreground-500 mb-1.5">
-                          {row.completed}/{row.totalVideos} completed · {row.stuckCount} {row.stuckCount === 1 ? 'quiz' : 'quizzes'} stuck
+                          {row.completed} completed · {row.stuckVideos?.length || 0} {(row.stuckVideos?.length === 1) ? 'quiz' : 'quizzes'} stuck
                         </p>
+
                         <div className="flex flex-wrap gap-1">
-                          {row.stuckVideoTitles.slice(0, 2).map((title, i) => (
+                          {/* Changed 'title' to 'videoObj' and mapped to 'videoObj.title' */}
+                          {row.stuckVideos?.slice(0, 2).map((videoObj, i) => (
                             <span key={i} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-red-50 text-red-700 border border-red-200">
-                              {title.length > 28 ? title.slice(0, 28) + '...' : title}
+                              {videoObj.title || ""}
                             </span>
                           ))}
-                          {row.stuckVideoTitles.length > 2 && (
-                            <span className="text-xs text-foreground-400">+{row.stuckVideoTitles.length - 2} more</span>
+
+                          {/* Fixed to check against 'stuckVideos.length' instead of missing property */}
+                          {row.stuckVideos?.length > 2 && (
+                            <span className="text-xs text-foreground-400">+{row.stuckVideos.length - 2} more</span>
                           )}
                         </div>
                       </div>
-                      <span className={`text-sm font-semibold mt-0.5 flex-shrink-0 ${completionColor(row.completionPct)}`}>
-                        {row.completionPct}%
+
+                      {/* If completionPct doesn't exist on the API, fallback to passRate */}
+                      <span className={`text-sm font-semibold mt-0.5 flex-shrink-0 ${typeof completionColor === 'function' ? completionColor(row.completionPct || parseInt(row.passRate)) : ''}`}>
+                        {row.completionPct !== undefined ? `${row.completionPct}%` : row.passRate}
                       </span>
                     </div>
                   ))}
-                  {atRiskEmployees.length > 6 && (
+
+                  {atRiskEmployee.length > 6 && (
                     <div className="px-5 py-2.5 text-center">
-                      <span className="text-xs text-foreground-400">+{atRiskEmployees.length - 6} more employees</span>
+                      <span className="text-xs text-foreground-400">+{atRiskEmployee.length - 6} more employees</span>
                     </div>
                   )}
                 </div>
               )}
             </div>
 
-            {/* Top Performers */}
             <div
               ref={topPerfRef}
               className={`bg-background-50 border border-background-200 rounded-xl overflow-hidden transition-all duration-500 ${highlightedSection === 'topperf' ? 'ring-2 ring-accent-300 border-accent-300' : ''}`}
@@ -800,9 +623,9 @@ export default function AdminReportsPage() {
                   <p className="text-xs text-foreground-500 mt-0.5">Employees with 100% training completion</p>
                 </div>
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-accent-100 text-accent-700">
-                  {topPerformers.length}
+                  {topPerformer.length}
                 </span>
-                {topPerformers.length > 0 && (
+                {/* {topPerformer.length > 0 && (
                   <button
                     onClick={exportTopPerformers}
                     className="ml-2 inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-foreground-500 hover:text-foreground-700 hover:bg-background-200/70 transition-colors cursor-pointer whitespace-nowrap"
@@ -810,9 +633,9 @@ export default function AdminReportsPage() {
                   >
                     <i className="ri-download-line text-xs"></i>
                   </button>
-                )}
+                )} */}
               </div>
-              {topPerformers.length === 0 ? (
+              {topPerformer.length === 0 ? (
                 <div className="px-5 py-10 text-center">
                   <div className="w-12 h-12 rounded-xl bg-background-100 flex items-center justify-center mx-auto mb-3">
                     <i className="ri-trophy-line text-xl text-foreground-400"></i>
@@ -822,28 +645,39 @@ export default function AdminReportsPage() {
                 </div>
               ) : (
                 <div className="divide-y divide-background-100">
-                  {topPerformers.map((row, idx) => (
-                    <div key={row.employee.id} className="px-5 py-3.5 flex items-center gap-3 hover:bg-background-50/70 transition-colors">
-                      <div className="w-9 h-9 rounded-full bg-accent-100 text-accent-700 flex items-center justify-center text-xs font-semibold flex-shrink-0">
-                        {row.employee.avatar}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <p className="text-sm font-medium text-foreground-900 truncate">{row.employee.name}</p>
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-secondary-100 text-secondary-700 flex-shrink-0">
-                            {row.employee.designation}
-                          </span>
+                  {topPerformer.map((row, idx) => {
+                    // Safely extract completed and total from the "3/3" string format
+                    const [completedCount, totalCount] = row.completed ? row.completed.split('/') : [0, 0];
+
+                    return (
+                      <div key={row._id} className="px-5 py-3.5 flex items-center gap-3 hover:bg-background-50/70 transition-colors">
+                        <div className="w-9 h-9 rounded-full bg-accent-100 text-accent-700 flex items-center justify-center text-xs font-semibold flex-shrink-0">
+                          {/* Fallback to initials if avatar doesn't exist on the root object */}
+                          {row.avatar || (row.name ? row.name.split(' ').map(n => n[0]).join('').slice(0, 2) : '')}
                         </div>
-                        <p className="text-xs text-foreground-500">{row.storeName} · {row.completed}/{row.total} videos · {row.avgPassRate}% first-try pass</p>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <p className="text-sm font-medium text-foreground-900 truncate">{row.name}</p>
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-secondary-100 text-secondary-700 flex-shrink-0">
+                              {row.designation}
+                            </span>
+                          </div>
+
+                          <p className="text-xs text-foreground-500">
+                            {row.store} · {completedCount}/{totalCount} videos · {row.passRate} first-try pass
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          {idx === 0 && <i className="ri-medal-fill text-lg text-amber-500"></i>}
+                          {idx === 1 && <i className="ri-medal-fill text-lg text-foreground-300"></i>}
+                          {idx === 2 && <i className="ri-medal-fill text-lg text-amber-700"></i>}
+                          <i className="ri-checkbox-circle-fill text-lg text-accent-500"></i>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        {idx === 0 && <i className="ri-medal-fill text-lg text-amber-500"></i>}
-                        {idx === 1 && <i className="ri-medal-fill text-lg text-foreground-300"></i>}
-                        {idx === 2 && <i className="ri-medal-fill text-lg text-amber-700"></i>}
-                        <i className="ri-checkbox-circle-fill text-lg text-accent-500"></i>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

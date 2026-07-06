@@ -2,14 +2,6 @@ import { useState, useMemo, useRef, useEffect, type FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import AdminSidebar from '@/components/feature/AdminSidebar';
-import {
-  getAllEmployees,
-  addEmployee,
-  updateEmployee,
-  deleteEmployee,
-  getNextEmployeeId,
-  getAllStores,
-} from '@/mocks/employeeStore';
 import type { Employee } from '@/mocks/employees';
 import { api } from '@/api/api';
 import { API } from '@/api/endpoints';

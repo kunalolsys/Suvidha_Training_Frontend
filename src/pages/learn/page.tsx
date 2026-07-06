@@ -263,7 +263,8 @@ export default function LearnPage() {
         </div>
 
         <VideoPlayer
-          veedUrl={video.veedUrl}
+          videoUrl={video.veedUrl}
+          // videoUrl={"https://veed.io/view/3cb0a71c-f9e1-466b-a9da-3a796615585a"}
           title={video.title}
           completed={videoCompleted}
           onComplete={async () => {

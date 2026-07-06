@@ -16,5 +16,7 @@ export const API = {
 
   REPORT: `${API_BASE_URL}/reports`,
 
+  DASHBOARD: `${API_BASE_URL}/dashboard`,
+
   PROGRESS: `${API_BASE_URL}/progress`,
 };
