@@ -91,7 +91,7 @@ export default function ExcelImportWidget({ videoId, setRefetch }) {
             <div className="flex justify-between items-center mb-6">
                 <div>
                     <h2 className="text-xl font-bold text-slate-800">Bulk Import Questions</h2>
-                    <p className="text-sm text-slate-500">Upload an Excel sheet mapping back to your quiz database.</p>
+                    {/* <p className="text-sm text-slate-500">Upload an Excel sheet mapping back to your quiz database.</p> */}
                 </div>
 
                 <button
