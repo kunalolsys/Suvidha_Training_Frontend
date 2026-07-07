@@ -19,9 +19,9 @@ export default function AdminLoginPage() {
     setError('');
     setLoading(true);
 
-    const success = await login(email.trim());
-    if (!success) {
-      setError('Invalid credentials. Please try again.');
+    const res = await login(email.trim(), "Admin");
+    if (!res.success) {
+      setError(res.message || 'Invalid credentials. Please try again.');
       setLoading(false);
       return;
     }

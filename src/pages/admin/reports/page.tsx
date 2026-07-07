@@ -5,6 +5,7 @@ import AdminSidebar from '@/components/feature/AdminSidebar';
 import { downloadCSV } from '@/utils/csvExport';
 import { api } from '@/api/api';
 import { API } from '@/api/endpoints';
+import axios from 'axios';
 
 type PeriodLabel = 'Last 30 Days' | 'Last 90 Days' | 'All Time';
 type PeriodValue = '30' | '90' | 'all';
@@ -128,7 +129,6 @@ export default function AdminReportsPage() {
   const [atRiskEmployee, setAtRiskEmployee] = useState([])
   const [topPerformer, setTopPerformer] = useState([])
   const modalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const fetchStats = async () => {
     try {
       setLoading(true);
@@ -147,6 +147,7 @@ export default function AdminReportsPage() {
   const fetchPerformanceBreakdown = async (currentView: any) => {
     try {
       setLoader(true);
+      setPerformanceBreakdown([])
       const endpoint = currentView === "designation" ? "by-designation" : "by-store";
 
       // FIX: Pass params correctly inside the configuration object
@@ -229,7 +230,44 @@ export default function AdminReportsPage() {
       setHighlightedSection((prev) => (prev === sectionId ? null : prev));
     }, 2500);
   }
+  const [exportLoading, setExportLoading] = useState(false)
+  const downloadReport = async (
+    type: string,
+    period: string,
+    format = "xlsx"
+  ) => {
+    try {
+      setExportLoading(true)
+      const token = localStorage.getItem("token");
 
+      const res = await axios.get(
+        `${API.EXPORT}/${type}?period=${period}&format=${format}`,
+        {
+          responseType: "blob",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      const blob = new Blob([res.data], {
+        type: res.headers["content-type"],
+      });
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `report-${type}-${period}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Export failed:", error);
+    } finally {
+      setExportLoading(false)
+    }
+  };
   if (!user || user.role !== 'Admin') {
     return <Navigate to="/admin" replace />;
   }
@@ -284,11 +322,9 @@ export default function AdminReportsPage() {
               <div className="w-9 h-9 rounded-xl bg-primary-100 flex items-center justify-center mb-3 group-hover:bg-primary-200 transition-colors">
                 <i className="ri-pie-chart-line text-lg text-primary-600"></i>
               </div>
-              {loading ? (
-                <div className="h-8 w-16 bg-background-200 rounded animate-pulse mb-1"></div>
-              ) : (
-                <p className="text-2xl font-semibold text-foreground-900">{stats.overallCompletion}</p>
-              )}
+
+              <p className="text-2xl font-semibold text-foreground-900">{stats.overallCompletion}</p>
+
               <p className="text-xs text-foreground-500 mt-0.5">Overall Completion</p>
             </div>
 
@@ -300,11 +336,8 @@ export default function AdminReportsPage() {
               <div className="w-9 h-9 rounded-xl bg-accent-100 flex items-center justify-center mb-3 group-hover:bg-accent-200 transition-colors">
                 <i className="ri-trophy-line text-lg text-accent-600"></i>
               </div>
-              {loading ? (
-                <div className="h-8 w-20 bg-background-200 rounded animate-pulse mb-1"></div>
-              ) : (
-                <p className="text-2xl font-semibold text-foreground-900">{stats.employeesAt100}</p>
-              )}
+
+              <p className="text-2xl font-semibold text-foreground-900">{stats.employeesAt100}</p>
               <p className="text-xs text-foreground-500 mt-0.5">Employees at 100</p>
             </div>
 
@@ -316,11 +349,8 @@ export default function AdminReportsPage() {
               <div className="w-9 h-9 rounded-xl bg-secondary-100 flex items-center justify-center mb-3 group-hover:bg-secondary-200 transition-colors">
                 <i className="ri-check-double-line text-lg text-secondary-600"></i>
               </div>
-              {loading ? (
-                <div className="h-8 w-16 bg-background-200 rounded animate-pulse mb-1"></div>
-              ) : (
-                <p className="text-2xl font-semibold text-foreground-900">{stats.firstTryPassRate}</p>
-              )}
+
+              <p className="text-2xl font-semibold text-foreground-900">{stats.firstTryPassRate}</p>
               <p className="text-xs text-foreground-500 mt-0.5">First-Try Pass Rate</p>
             </div>
 
@@ -332,11 +362,8 @@ export default function AdminReportsPage() {
               <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center mb-3 group-hover:bg-amber-200 transition-colors">
                 <i className="ri-refresh-line text-lg text-amber-600"></i>
               </div>
-              {loading ? (
-                <div className="h-8 w-12 bg-background-200 rounded animate-pulse mb-1"></div>
-              ) : (
-                <p className="text-2xl font-semibold text-foreground-900">{stats.totalQuizAttempts}</p>
-              )}
+
+              <p className="text-2xl font-semibold text-foreground-900">{stats.totalQuizAttempts}</p>
               <p className="text-xs text-foreground-500 mt-0.5">Total Quiz Attempts</p>
             </div>
 
@@ -348,11 +375,8 @@ export default function AdminReportsPage() {
               <div className="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center mb-3 group-hover:bg-red-200 transition-colors">
                 <i className="ri-alert-line text-lg text-red-600"></i>
               </div>
-              {loading ? (
-                <div className="h-8 w-12 bg-background-200 rounded animate-pulse mb-1"></div>
-              ) : (
-                <p className="text-2xl font-semibold text-red-600">{stats.needAttention}</p>
-              )}
+
+              <p className="text-2xl font-semibold text-red-600">{stats.needAttention}</p>
               <p className="text-xs text-foreground-500 mt-0.5">Need Attention</p>
             </div>
           </div>
@@ -393,14 +417,50 @@ export default function AdminReportsPage() {
                   </button>
                 </div>
               </div>
-              {/* <button
-                onClick={performanceView === 'designation' ? exportDesignationReport : exportStoreReport}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-foreground-500 hover:text-foreground-700 hover:bg-background-200/70 transition-colors cursor-pointer whitespace-nowrap"
-                title="Download CSV"
+              <button
+                disabled={exportLoading}
+                onClick={() =>
+                  downloadReport(
+                    performanceView === "designation"
+                      ? "by-designation"
+                      : "by-store",
+                    period,
+                    "xlsx"
+                  )
+                }
+                className={`
+    inline-flex items-center gap-2
+    px-4 py-2
+    rounded-xl
+    text-sm font-semibold
+    transition-all duration-200
+    border border-primary-200
+    bg-primary-500 text-white
+    shadow-sm
+    hover:bg-primary-600
+    hover:shadow-lg
+    hover:-translate-y-0.5
+    active:translate-y-0
+    disabled:opacity-60
+    disabled:cursor-not-allowed
+    disabled:hover:translate-y-0
+    disabled:hover:shadow-sm
+    whitespace-nowrap
+  `}
+                title="Download Excel Report"
               >
-                <i className="ri-download-line text-sm"></i>
-                Export
-              </button> */}
+                {exportLoading ? (
+                  <>
+                    <i className="ri-loader-4-line animate-spin text-base"></i>
+                    <span>Exporting...</span>
+                  </>
+                ) : (
+                  <>
+                    <i className="ri-file-excel-2-line text-base"></i>
+                    <span>Export Excel</span>
+                  </>
+                )}
+              </button>
             </div>
 
             {performanceView === 'designation' && (
@@ -416,51 +476,87 @@ export default function AdminReportsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-background-100">
-                    {Array.isArray(performanceBreakdown) && performanceBreakdown.length > 0 && performanceBreakdown.map((des) => (
-                      <tr key={des.designation} className="hover:bg-background-50/70 transition-colors">
-                        <td className="px-5 py-3">
-                          <div className="flex items-center gap-2.5">
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${designationColors[des.designation] || 'bg-accent-100 text-accent-600'}`}>
-                              <i className={`${designationIcons[des.designation] || 'ri-briefcase-line'} text-sm`}></i>
+                    {loader ?
+                      Array.from({ length: 10 }).map((_, index) => (
+                        <tr key={index} className="animate-pulse">
+                          <td className="px-5 py-3">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-lg bg-gray-200"></div>
+                              <div className="h-4 w-32 bg-gray-200 rounded"></div>
                             </div>
-                            <p className="text-sm font-medium text-foreground-900">{des.designation}</p>
-                          </div>
-                        </td>
-                        <td className="px-5 py-3 text-sm text-foreground-700 text-center">{des.employees}</td>
-                        <td className="px-5 py-3 text-center">
-                          <div className="flex items-center justify-center gap-2">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${completionBg(des.completionPct)}`}>
-                              {des.completionPct}%
-                            </span>
-                            <span className="text-xs text-foreground-400">{des.completionFrac}</span>
-                          </div>
-                        </td>
-                        <td className="px-5 py-3">
-                          {des.bestStore ? (
+                          </td>
+
+                          <td className="px-5 py-3 text-center">
+                            <div className="h-4 w-10 bg-gray-200 rounded mx-auto"></div>
+                          </td>
+
+                          <td className="px-5 py-3">
+                            <div className="flex justify-center gap-2">
+                              <div className="h-5 w-16 bg-gray-200 rounded-full"></div>
+                              <div className="h-4 w-12 bg-gray-200 rounded"></div>
+                            </div>
+                          </td>
+
+                          <td className="px-5 py-3">
                             <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-lg bg-accent-100 flex items-center justify-center flex-shrink-0">
-                                <i className="ri-store-2-line text-xs text-accent-600"></i>
-                              </div>
-                              <div className="min-w-0">
-                                <p className="text-sm text-foreground-700 truncate">{des.bestStore}</p>
-                                <p className="text-xs text-accent-600">{des.bestStorePct}</p>
+                              <div className="w-7 h-7 rounded-lg bg-gray-200"></div>
+                              <div>
+                                <div className="h-4 w-28 bg-gray-200 rounded mb-1"></div>
+                                <div className="h-3 w-16 bg-gray-200 rounded"></div>
                               </div>
                             </div>
-                          ) : (
-                            <span className="text-xs text-foreground-400">—</span>
-                          )}
-                        </td>
-                        <td className="px-5 py-3 text-center">
-                          {des.atRisk > 0 ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                              {des.atRisk}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-foreground-400">0</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+
+                          <td className="px-5 py-3 text-center">
+                            <div className="h-5 w-8 bg-gray-200 rounded-full mx-auto"></div>
+                          </td>
+                        </tr>
+                      )) :
+                      performanceBreakdown.map((des) => (
+                        <tr key={des.designation} className="hover:bg-background-50/70 transition-colors">
+                          <td className="px-5 py-3">
+                            <div className="flex items-center gap-2.5">
+                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${designationColors[des.designation] || 'bg-accent-100 text-accent-600'}`}>
+                                <i className={`${designationIcons[des.designation] || 'ri-briefcase-line'} text-sm`}></i>
+                              </div>
+                              <p className="text-sm font-medium text-foreground-900">{des.designation}</p>
+                            </div>
+                          </td>
+                          <td className="px-5 py-3 text-sm text-foreground-700 text-center">{des.employees}</td>
+                          <td className="px-5 py-3 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${completionBg(des.completionPct)}`}>
+                                {des.completionPct}%
+                              </span>
+                              <span className="text-xs text-foreground-400">{des.completionFrac}</span>
+                            </div>
+                          </td>
+                          <td className="px-5 py-3">
+                            {des.bestStore ? (
+                              <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded-lg bg-accent-100 flex items-center justify-center flex-shrink-0">
+                                  <i className="ri-store-2-line text-xs text-accent-600"></i>
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-sm text-foreground-700 truncate">{des.bestStore}</p>
+                                  <p className="text-xs text-accent-600">{des.bestStorePct}</p>
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-foreground-400">—</span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3 text-center">
+                            {des.atRisk > 0 ? (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                                {des.atRisk}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-foreground-400">0</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
               </div>
@@ -474,45 +570,71 @@ export default function AdminReportsPage() {
                       <th className="px-5 py-2.5 text-xs font-semibold text-foreground-500 uppercase tracking-wider">Store</th>
                       <th className="px-5 py-2.5 text-xs font-semibold text-foreground-500 uppercase tracking-wider text-center">Employees</th>
                       <th className="px-5 py-2.5 text-xs font-semibold text-foreground-500 uppercase tracking-wider text-center">Completion</th>
-                      <th className="px-5 py-2.5 text-xs font-semibold text-foreground-500 uppercase tracking-wider">Total Employee</th>
+                      <th className="px-5 py-2.5 text-xs font-semibold text-foreground-500 uppercase tracking-wider">Total Attempts</th>
                       {/* <th className="px-5 py-2.5 text-xs font-semibold text-foreground-500 uppercase tracking-wider">Needs Attention</th> */}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-background-100">
-                    {performanceBreakdown.map((store) => (
-                      <tr key={store.storeId} className="hover:bg-background-50/70 transition-colors">
-                        <td className="px-5 py-3">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-lg bg-background-100 flex items-center justify-center flex-shrink-0">
-                              <i className="ri-store-2-line text-sm text-foreground-500"></i>
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-foreground-900">{store.store}</p>
-                              <p className="text-xs text-foreground-400 font-mono">{store.storeCode}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-5 py-3 text-sm text-foreground-700 text-center">{store.employees}</td>
-                        <td className="px-5 py-3 text-center">
-                          <div className="flex items-center justify-center gap-2">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${completionBg(store.completionPct)}`}>
-                              {store.completionPct}%
-                            </span>
-                            <span className="text-xs text-foreground-400">{store.completionFrac}</span>
-                          </div>
-                        </td>
-                        <td className="px-5 py-3">
-                          {store.totalAttempts ? (
-                            <div className="flex items-center gap-2">
-                              <div className="min-w-0">
-                                <p className="text-sm text-foreground-700 truncate">{store.totalAttempts}</p>
+                    {
+                      loader ?
+                        Array.from({ length: 10 }).map((_, index) => (
+                          <tr key={index} className="animate-pulse">
+                            <td className="px-5 py-3">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-lg bg-gray-200"></div>
+                                <div className="h-4 w-32 bg-gray-200 rounded"></div>
                               </div>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-foreground-400">—</span>
-                          )}
-                        </td>
-                        {/* <td className="px-5 py-3">
+                            </td>
+
+                            <td className="px-5 py-3 text-center">
+                              <div className="h-4 w-10 bg-gray-200 rounded mx-auto"></div>
+                            </td>
+
+                            <td className="px-5 py-3">
+                              <div className="flex justify-center gap-2">
+                                <div className="h-5 w-16 bg-gray-200 rounded-full"></div>
+                                <div className="h-4 w-12 bg-gray-200 rounded"></div>
+                              </div>
+                            </td>
+
+                            <td className="px-5 py-3">
+                              <div className="h-5 w-8 bg-gray-200 rounded-full"></div>
+                            </td>
+                          </tr>
+                        )) : performanceBreakdown.map((store) => (
+                          <tr key={store.storeId} className="hover:bg-background-50/70 transition-colors">
+                            <td className="px-5 py-3">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-lg bg-background-100 flex items-center justify-center flex-shrink-0">
+                                  <i className="ri-store-2-line text-sm text-foreground-500"></i>
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-foreground-900">{store.store}</p>
+                                  <p className="text-xs text-foreground-400 font-mono">{store.storeCode}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-5 py-3 text-sm text-foreground-700 text-center">{store.employees}</td>
+                            <td className="px-5 py-3 text-center">
+                              <div className="flex items-center justify-center gap-2">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${completionBg(store.completionPct)}`}>
+                                  {store.completionPct}%
+                                </span>
+                                <span className="text-xs text-foreground-400">{store.completionFrac}</span>
+                              </div>
+                            </td>
+                            <td className="px-5 py-3">
+                              {store.totalAttempts ? (
+                                <div className="flex items-center gap-2">
+                                  <div className="min-w-0">
+                                    <p className="text-sm text-foreground-700 truncate">{store.totalAttempts}</p>
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-foreground-400">—</span>
+                              )}
+                            </td>
+                            {/* <td className="px-5 py-3">
                           {store.atRisk ? (
                             <div className="flex items-center gap-2">
                               <div className="w-7 h-7 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-xs font-semibold flex-shrink-0">
@@ -523,8 +645,8 @@ export default function AdminReportsPage() {
                             <span className="text-xs text-foreground-400">—</span>
                           )}
                         </td> */}
-                      </tr>
-                    ))}
+                          </tr>
+                        ))}
                   </tbody>
                 </table>
               </div>

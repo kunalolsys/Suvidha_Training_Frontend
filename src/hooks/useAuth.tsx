@@ -1,11 +1,12 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import type { Employee } from '@/mocks/employees';
-import { findEmployeeByEmail } from '@/mocks/employees';
 import { loginUser } from '@/services/auth.service';
 
 interface AuthContextType {
   user: Employee | null;
-  login: (userName: string) => Promise<any>;
+  success: boolean;
+  message: string;
+  login: (userName: string, role: string) => Promise<any>;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -23,24 +24,29 @@ function getStoredUser(): Employee | null {
   }
   return null;
 }
-
+type LoginResult = {
+  success: boolean;
+  message: string;
+};
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Employee | null>(getStoredUser);
 
   const login = useCallback(
-    async (userName: string): Promise<boolean> => {
+    async (userName: string, role: string): Promise<LoginResult> => {
       try {
-        const { token, user } = await loginUser(userName);
+        const { token, user, success, message } = await loginUser(userName, role);
 
         setUser(user);
 
         localStorage.setItem("token", token);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
-
-        return true;
+        
+        return { success, message };
       } catch (error) {
-        console.error(error);
-        return false;
+        return {
+          success: false,
+          message: "Login failed",
+        };;
       }
     },
     []

@@ -13,7 +13,7 @@ interface VideoForm {
   veedUrl: string;
   designation: string;
   sortOrder: number;
-  duration: string;
+  // duration: string;
   thumbnail: string;
 }
 
@@ -22,7 +22,7 @@ const defaultForm: VideoForm = {
   veedUrl: '',
   designation: '',
   sortOrder: 1,
-  duration: '10:00',
+  // duration: '10:00',
   thumbnail: '',
 };
 
@@ -117,7 +117,7 @@ export default function AdminVideosPage() {
       veedUrl: v.veedUrl,
       designation: v.designation._id,
       sortOrder: v.sortOrder,
-      duration: v.duration,
+      // duration: v.duration,
       thumbnail: v.thumbnail,
     });
     setErrors({});
@@ -128,8 +128,8 @@ export default function AdminVideosPage() {
     const newErrors: Partial<Record<keyof VideoForm, string>> = {};
     if (!form.title.trim()) newErrors.title = 'Video title is required';
     if (!form.designation) newErrors.designation = 'Designation is required';
-    if (!form.veedUrl.trim()) newErrors.veedUrl = 'Veed.io URL is required';
-    if (!form.duration.trim()) newErrors.duration = 'Duration is required';
+    if (!form.veedUrl.trim()) newErrors.veedUrl = 'Vedio URL is required';
+    // if (!form.duration.trim()) newErrors.duration = 'Duration is required';
     if (form.sortOrder < 1) newErrors.sortOrder = 'Sequence order must be at least 1';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -250,7 +250,7 @@ export default function AdminVideosPage() {
                     <th className="px-5 py-3 text-xs font-semibold text-foreground-600">Title</th>
                     <th className="px-5 py-3 text-xs font-semibold text-foreground-600">Designation</th>
                     <th className="px-5 py-3 text-xs font-semibold text-foreground-600">Order</th>
-                    <th className="px-5 py-3 text-xs font-semibold text-foreground-600">Duration</th>
+                    {/* <th className="px-5 py-3 text-xs font-semibold text-foreground-600">Duration</th> */}
                     <th className="px-5 py-3 text-xs font-semibold text-foreground-600 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -263,7 +263,7 @@ export default function AdminVideosPage() {
                         <span className="text-xs px-2 py-0.5 rounded-full bg-primary-100 text-primary-700 font-medium">{v.designation.name}</span>
                       </td>
                       <td className="px-5 py-3 text-sm text-foreground-600">{v.sortOrder}</td>
-                      <td className="px-5 py-3 text-sm text-foreground-600">{v.duration}</td>
+                      {/* <td className="px-5 py-3 text-sm text-foreground-600">{v.duration}</td> */}
                       <td className="px-5 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button onClick={() => openEdit(v._id)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-background-200 text-foreground-500 hover:text-foreground-700 transition-colors cursor-pointer">
@@ -337,7 +337,7 @@ export default function AdminVideosPage() {
 
                 {/* Veed.io URL */}
                 <div>
-                  <label className="block text-sm font-medium text-foreground-700 mb-2">Veed.io URL <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-foreground-700 mb-2">Vedio URL <span className="text-red-500">*</span></label>
                   <input
                     value={form.veedUrl}
                     onChange={(e) => updateField('veedUrl', e.target.value)}
@@ -386,8 +386,8 @@ export default function AdminVideosPage() {
                 </div>
 
                 {/* Duration + Thumbnail */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
+                <div className="">
+                  {/* <div>
                     <label className="block text-sm font-medium text-foreground-700 mb-2">Duration <span className="text-red-500">*</span></label>
                     <input
                       value={form.duration}
@@ -396,7 +396,7 @@ export default function AdminVideosPage() {
                       className={`w-full px-4 py-3 bg-background-50 border rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400 transition-colors ${errors.duration ? 'border-red-300 bg-red-50/30' : 'border-background-200'}`}
                     />
                     {errors.duration && <p className="text-xs text-red-500 mt-1">{errors.duration}</p>}
-                  </div>
+                  </div> */}
                   <div>
                     <label className="block text-sm font-medium text-foreground-700 mb-2">Thumbnail URL</label>
                     <input

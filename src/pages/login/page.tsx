@@ -1,15 +1,16 @@
 import { useState, useEffect, useRef, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
+  const location = useLocation();
   const [loading, setLoading] = useState(false);
   const { login, isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
   const loginTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
+  const role = location.pathname === "/admin" ? "Admin" : "Employee";
   useEffect(() => {
     if (isAuthenticated && user) {
       if (user.role === 'Admin') {
@@ -40,9 +41,9 @@ export default function LoginPage() {
     setLoading(true);
 
     // Simulate brief network delay
-    const success = await login(email.trim());
-    if (!success) {
-      setError('No account found with this email or code. Please check and try again.');
+    const res = await login(email.trim(), "Employee");
+    if (!res.success) {
+      setError(res.message || 'No account found with this email or code. Please check and try again.');
       setLoading(false);
     }
 
@@ -111,7 +112,7 @@ export default function LoginPage() {
 
           <div className="mt-6 pt-5 border-t border-background-200">
             <p className="text-xs text-foreground-500 text-center">
-              Use your Suvidha company email to sign in.
+              Use your Suvidha company email or employee code to sign in.
               <br />
               Contact HR if you need access.
             </p>
@@ -119,11 +120,11 @@ export default function LoginPage() {
         </div>
 
         {/* Demo hints */}
-        <p className="mt-6 text-xs text-foreground-400 text-center space-y-1">
+        {/* <p className="mt-6 text-xs text-foreground-400 text-center space-y-1">
           <span>Demo — Employee: <span className="text-foreground-600 font-medium">rajesh.kumar@suvidha.com</span> (Sales)</span>
           <br />
           <span>Demo — Admin: <span className="text-foreground-600 font-medium">admin@suvidha.com</span> (Admin)</span>
-        </p>
+        </p> */}
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import { API } from '@/api/endpoints';
 import { message, Select } from 'antd';
 import { useDebounce } from '@/common/Debounce';
 import Pagination from '@/common/Pagination';
+import ExcelImportWidget from './ImportQuestion';
 
 interface QuestionForm {
   videoId: string;
@@ -34,6 +35,7 @@ const defaultForm: QuestionForm = {
 
 export default function AdminQuestionsPage() {
   const { user } = useAuth();
+  const [importMode, setImportMode] = useState("manual");
   const [questions, setQuestions] = useState([]);
   const [videos, setVideos] = useState([]);
   const [search, setSearch] = useState('');
@@ -47,6 +49,7 @@ export default function AdminQuestionsPage() {
   const [errors, setErrors] = useState<Partial<Record<keyof QuestionForm, string>>>();
   const [visibleOptions, setVisibleOptions] = useState<Set<'a' | 'b' | 'c' | 'd' | 'e'>>(new Set(['a', 'b', 'c']));
   const [loading, setLoading] = useState(false)
+  const [refetch, setRefetch] = useState(false)
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({
     total: 0,
@@ -95,7 +98,7 @@ export default function AdminQuestionsPage() {
         clearTimeout(modalTimerRef.current);
       }
     };
-  }, [page, debouncedSearch, filterVideo]);
+  }, [page, debouncedSearch, filterVideo, refetch]);
   useEffect(() => {
     setPage(1);
   }, [debouncedSearch, filterVideo]);
@@ -278,7 +281,6 @@ export default function AdminQuestionsPage() {
       });
     }
   };
-
   return (
     <div className="min-h-screen bg-background-50 flex">
       <AdminSidebar />
@@ -431,9 +433,12 @@ export default function AdminQuestionsPage() {
             {/* Form */}
             <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-8 py-6">
               <div className="space-y-6 max-w-xl">
-                {/* Linked Video */}
+
+                {/* 1. Linked Video Selector (Shared by both workflows) */}
                 <div>
-                  <label className="block text-sm font-medium text-foreground-700 mb-2">Linked Video <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-foreground-700 mb-2">
+                    Linked Video <span className="text-red-500">*</span>
+                  </label>
                   <Select
                     value={form.videoId}
                     placeholder="Select video"
@@ -441,167 +446,205 @@ export default function AdminQuestionsPage() {
                     showSearch
                     optionFilterProp="label"
                     onChange={(value) => updateField('videoId', value)}
-                    className={`w-full px-4 py-3 bg-background-50 border rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400 cursor-pointer transition-colors ${errors.videoId ? 'border-red-300 bg-red-50/30' : 'border-background-200'}`}
+                    className={`w-full px-4 py-3 bg-background-50 border rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400 cursor-pointer transition-colors ${errors.videoId ? 'border-red-300 bg-red-50/30' : 'border-background-200'
+                      }`}
                     options={[
-                      {
-                        label: "Select video",
-                        value: "",
-                      },
+                      { label: "Select video", value: "" },
                       ...videos.map((d) => ({
                         label: d.title,
                         value: d._id,
                       })),
                     ]}
                   />
-
                   {errors.videoId && <p className="text-xs text-red-500 mt-1.5">{errors.videoId}</p>}
                 </div>
 
-                {/* Question Text */}
-                <div>
-                  <label className="block text-sm font-medium text-foreground-700 mb-2">Question Text <span className="text-red-500">*</span></label>
-                  <textarea
-                    value={form.questionText}
-                    onChange={(e) => updateField('questionText', e.target.value)}
-                    rows={4}
-                    placeholder="e.g. What is the primary goal of consultative selling?"
-                    className={`w-full px-4 py-3 bg-background-50 border rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400 resize-none transition-colors ${errors.questionText ? 'border-red-300 bg-red-50/30' : 'border-background-200'}`}
-                  />
-                  {errors.questionText && <p className="text-xs text-red-500 mt-1.5">{errors.questionText}</p>}
-                </div>
+                {/* 2. Mode Toggle Tabs */}
+                {!editingId && <div className="flex border-b border-slate-200 p-0.5 bg-slate-100/80 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setImportMode("manual")}
+                    className={`flex-1 text-center py-2 text-xs font-semibold rounded-lg transition-all ${importMode === "manual"
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-500 hover:text-slate-800"
+                      }`}
+                  >
+                    Manual Creation
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!form.videoId}
+                    onClick={() => setImportMode("excel")}
+                    className={`flex-1 text-center py-2 text-xs font-semibold rounded-lg transition-all ${!form.videoId
+                      ? "opacity-40 cursor-not-allowed text-slate-400"
+                      : importMode === "excel"
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-slate-500 hover:text-slate-800"
+                      }`}
+                  >
+                    Excel Bulk Import {!form.videoId && "(Select Video First)"}
+                  </button>
+                </div>}
 
-                {/* Options */}
-                <div>
-                  <label className="block text-sm font-medium text-foreground-700 mb-3">Answer Options</label>
-                  <div className="grid grid-cols-1 gap-4">
+                {/* 3. Conditional Workflow Switching */}
+                {importMode === "excel" ? (
+                  /* Excel Import Pathway */
+                  <ExcelImportWidget videoId={form.videoId} setRefetch={setRefetch} />
+                ) : (
+                  /* Manual Input Pathway */
+                  <>
+                    {/* Question Text */}
                     <div>
-                      <label className="block text-xs text-foreground-500 mb-1.5">Option A <span className="text-red-500">*</span></label>
-                      <input
-                        value={form.optionA}
-                        onChange={(e) => updateField('optionA', e.target.value)}
-                        placeholder="Enter option A..."
-                        className={`w-full px-4 py-3 bg-background-50 border rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400 transition-colors ${errors.optionA ? 'border-red-300 bg-red-50/30' : 'border-background-200'}`}
+                      <label className="block text-sm font-medium text-foreground-700 mb-2">
+                        Question Text <span className="text-red-500">*</span>
+                      </label>
+                      <textarea
+                        value={form.questionText}
+                        onChange={(e) => updateField('questionText', e.target.value)}
+                        rows={4}
+                        placeholder="e.g. What is the primary goal of consultative selling?"
+                        className={`w-full px-4 py-3 bg-background-50 border rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400 resize-none transition-colors ${errors.questionText ? 'border-red-300 bg-red-50/30' : 'border-background-200'
+                          }`}
                       />
-                      {errors.optionA && <p className="text-xs text-red-500 mt-1">{errors.optionA}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-xs text-foreground-500 mb-1.5">Option B <span className="text-red-500">*</span></label>
-                      <input
-                        value={form.optionB}
-                        onChange={(e) => updateField('optionB', e.target.value)}
-                        placeholder="Enter option B..."
-                        className={`w-full px-4 py-3 bg-background-50 border rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400 transition-colors ${errors.optionB ? 'border-red-300 bg-red-50/30' : 'border-background-200'}`}
-                      />
-                      {errors.optionB && <p className="text-xs text-red-500 mt-1">{errors.optionB}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-xs text-foreground-500 mb-1.5">Option C <span className="text-red-500">*</span></label>
-                      <input
-                        value={form.optionC}
-                        onChange={(e) => updateField('optionC', e.target.value)}
-                        placeholder="Enter option C..."
-                        className={`w-full px-4 py-3 bg-background-50 border rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400 transition-colors ${errors.optionC ? 'border-red-300 bg-red-50/30' : 'border-background-200'}`}
-                      />
-                      {errors.optionC && <p className="text-xs text-red-500 mt-1">{errors.optionC}</p>}
+                      {errors.questionText && <p className="text-xs text-red-500 mt-1.5">{errors.questionText}</p>}
                     </div>
 
-                    {visibleOptions.has('d') && (
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <label className="block text-xs text-foreground-500">Option D <span className="text-red-500">*</span></label>
-                          <button
-                            type="button"
-                            onClick={() => removeOption('d')}
-                            className="text-xs text-red-500 hover:text-red-700 transition-colors cursor-pointer"
-                          >
-                            Remove
-                          </button>
+                    {/* Options */}
+                    <div>
+                      <label className="block text-sm font-medium text-foreground-700 mb-3">Answer Options</label>
+                      <div className="grid grid-cols-1 gap-4">
+                        <div>
+                          <label className="block text-xs text-foreground-500 mb-1.5">Option A <span className="text-red-500">*</span></label>
+                          <input
+                            value={form.optionA}
+                            onChange={(e) => updateField('optionA', e.target.value)}
+                            placeholder="Enter option A..."
+                            className={`w-full px-4 py-3 bg-background-50 border rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400 transition-colors ${errors.optionA ? 'border-red-300 bg-red-50/30' : 'border-background-200'}`}
+                          />
+                          {errors.optionA && <p className="text-xs text-red-500 mt-1">{errors.optionA}</p>}
                         </div>
-                        <input
-                          value={form.optionD}
-                          onChange={(e) => updateField('optionD', e.target.value)}
-                          placeholder="Enter option D..."
-                          className={`w-full px-4 py-3 bg-background-50 border rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400 transition-colors ${errors.optionD ? 'border-red-300 bg-red-50/30' : 'border-background-200'}`}
-                        />
-                        {errors.optionD && <p className="text-xs text-red-500 mt-1">{errors.optionD}</p>}
-                      </div>
-                    )}
-
-                    {visibleOptions.has('e') && (
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <label className="block text-xs text-foreground-500">Option E (optional)</label>
-                          <button
-                            type="button"
-                            onClick={() => removeOption('e')}
-                            className="text-xs text-red-500 hover:text-red-700 transition-colors cursor-pointer"
-                          >
-                            Remove
-                          </button>
+                        <div>
+                          <label className="block text-xs text-foreground-500 mb-1.5">Option B <span className="text-red-500">*</span></label>
+                          <input
+                            value={form.optionB}
+                            onChange={(e) => updateField('optionB', e.target.value)}
+                            placeholder="Enter option B..."
+                            className={`w-full px-4 py-3 bg-background-50 border rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400 transition-colors ${errors.optionB ? 'border-red-300 bg-red-50/30' : 'border-background-200'}`}
+                          />
+                          {errors.optionB && <p className="text-xs text-red-500 mt-1">{errors.optionB}</p>}
                         </div>
-                        <input
-                          value={form.optionE}
-                          onChange={(e) => updateField('optionE', e.target.value)}
-                          placeholder="Enter optional fifth option..."
-                          className="w-full px-4 py-3 bg-background-50 border border-background-200 rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400"
-                        />
+                        <div>
+                          <label className="block text-xs text-foreground-500 mb-1.5">Option C <span className="text-red-500">*</span></label>
+                          <input
+                            value={form.optionC}
+                            onChange={(e) => updateField('optionC', e.target.value)}
+                            placeholder="Enter option C..."
+                            className={`w-full px-4 py-3 bg-background-50 border rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400 transition-colors ${errors.optionC ? 'border-red-300 bg-red-50/30' : 'border-background-200'}`}
+                          />
+                          {errors.optionC && <p className="text-xs text-red-500 mt-1">{errors.optionC}</p>}
+                        </div>
+
+                        {visibleOptions.has('d') && (
+                          <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <label className="block text-xs text-foreground-500">Option D <span className="text-red-500">*</span></label>
+                              <button
+                                type="button"
+                                onClick={() => removeOption('d')}
+                                className="text-xs text-red-500 hover:text-red-700 transition-colors cursor-pointer"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                            <input
+                              value={form.optionD}
+                              onChange={(e) => updateField('optionD', e.target.value)}
+                              placeholder="Enter option D..."
+                              className={`w-full px-4 py-3 bg-background-50 border rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400 transition-colors ${errors.optionD ? 'border-red-300 bg-red-50/30' : 'border-background-200'}`}
+                            />
+                            {errors.optionD && <p className="text-xs text-red-500 mt-1">{errors.optionD}</p>}
+                          </div>
+                        )}
+
+                        {visibleOptions.has('e') && (
+                          <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <label className="block text-xs text-foreground-500">Option E (optional)</label>
+                              <button
+                                type="button"
+                                onClick={() => removeOption('e')}
+                                className="text-xs text-red-500 hover:text-red-700 transition-colors cursor-pointer"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                            <input
+                              value={form.optionE}
+                              onChange={(e) => updateField('optionE', e.target.value)}
+                              placeholder="Enter optional fifth option..."
+                              className="w-full px-4 py-3 bg-background-50 border border-background-200 rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400"
+                            />
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
 
-                  {/* Add more options button */}
-                  {canAddMore && (
-                    <button
-                      type="button"
-                      onClick={addNextOption}
-                      className="mt-4 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary-700 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors cursor-pointer"
-                    >
-                      <i className="ri-add-line"></i>
-                      Add Options
-                    </button>
-                  )}
-                </div>
-
-                {/* Correct + Sequence */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-foreground-700 mb-2">Correct Option</label>
-                    <div className="flex gap-2">
-                      {(['a', 'b', 'c', 'd', 'e'] as const).map((opt) => (
+                      {canAddMore && (
                         <button
-                          key={opt}
                           type="button"
-                          disabled={!visibleOptions.has(opt)}
-                          onClick={() => updateField('correctOption', opt)}
-                          className={`w-10 h-10 rounded-xl text-sm font-semibold transition-all cursor-pointer ${!visibleOptions.has(opt)
-                            ? 'opacity-30 cursor-not-allowed bg-background-100 text-foreground-400'
-                            : form.correctOption === opt
-                              ? 'bg-primary-500 text-background-50 shadow-sm'
-                              : 'bg-background-100 text-foreground-600 hover:bg-background-200'
-                            }`}
+                          onClick={addNextOption}
+                          className="mt-4 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary-700 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors cursor-pointer"
                         >
-                          {opt.toUpperCase()}
+                          <i className="ri-add-line"></i>
+                          Add Options
                         </button>
-                      ))}
+                      )}
                     </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-foreground-700 mb-2">Sequence Order <span className="text-red-500">*</span></label>
-                    <input
-                      type="number"
-                      value={form.sortOrder}
-                      onChange={(e) => updateField('sortOrder', parseInt(e.target.value, 10) || 1)}
-                      min={1}
-                      className={`w-full px-4 py-3 bg-background-50 border rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400 transition-colors ${errors.sortOrder ? 'border-red-300 bg-red-50/30' : 'border-background-200'}`}
-                    />
-                    {errors.sortOrder && <p className="text-xs text-red-500 mt-1">{errors.sortOrder}</p>}
-                  </div>
-                </div>
+
+                    {/* Correct + Sequence */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-foreground-700 mb-2">Correct Option</label>
+                        <div className="flex gap-2">
+                          {(['a', 'b', 'c', 'd', 'e'] as const).map((opt) => (
+                            <button
+                              key={opt}
+                              type="button"
+                              disabled={!visibleOptions.has(opt)}
+                              onClick={() => updateField('correctOption', opt)}
+                              className={`w-10 h-10 rounded-xl text-sm font-semibold transition-all cursor-pointer ${!visibleOptions.has(opt)
+                                ? 'opacity-30 cursor-not-allowed bg-background-100 text-foreground-400'
+                                : form.correctOption === opt
+                                  ? 'bg-primary-500 text-background-50 shadow-sm'
+                                  : 'bg-background-100 text-foreground-600 hover:bg-background-200'
+                                }`}
+                            >
+                              {opt.toUpperCase()}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-foreground-700 mb-2">
+                          Sequence Order <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          value={form.sortOrder}
+                          onChange={(e) => updateField('sortOrder', parseInt(e.target.value, 10) || 1)}
+                          min={1}
+                          className={`w-full px-4 py-3 bg-background-50 border rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400 transition-colors ${errors.sortOrder ? 'border-red-300 bg-red-50/30' : 'border-background-200'
+                            }`}
+                        />
+                        {errors.sortOrder && <p className="text-xs text-red-500 mt-1">{errors.sortOrder}</p>}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </form>
 
             {/* Footer */}
-            <div className="px-8 py-5 border-t border-background-200 shrink-0 bg-background-50">
+            {importMode !== "excel" && <div className="px-8 py-5 border-t border-background-200 shrink-0 bg-background-50">
               <div className="flex gap-3 justify-end">
                 <button type="button" onClick={() => setShowDrawer(false)} className="px-6 py-2.5 bg-background-100 hover:bg-background-200 text-foreground-700 font-medium rounded-xl text-sm transition-colors cursor-pointer">
                   Cancel
@@ -610,7 +653,7 @@ export default function AdminQuestionsPage() {
                   {editingId ? 'Save Changes' : 'Add Question'}
                 </button>
               </div>
-            </div>
+            </div>}
           </div>
         </div>
       )}

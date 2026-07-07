@@ -137,7 +137,16 @@ export default function VideoPlayer({ videoUrl, title, completed = false, onComp
               } else if (event.data === 0) {
                 setIsPlaying(false);
                 setIsTimeUp(true);
-                setTimeLeft(0);
+                setHasStarted(false);
+
+                if (event.target && typeof event.target.getDuration === "function") {
+                  setTimeLeft(Math.floor(event.target.getDuration()));
+                }
+
+                // 2. Clear out YouTube's native replay screen by forcing a clean, silent iframe reload
+                if (iframeRef.current) {
+                  iframeRef.current.src = embedUrl;
+                }
               }
             }
           }

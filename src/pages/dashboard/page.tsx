@@ -3,6 +3,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@/api/api';
 import { API } from '@/api/endpoints';
+import noThumbnail from '@/assets/noThumbnail.png';
 
 const getInitials = (name?: string) => {
   if (!name) return "";
@@ -278,7 +279,7 @@ export default function DashboardPage() {
 
                   <div className="w-28 h-16 md:w-36 md:h-20 rounded-lg overflow-hidden flex-shrink-0 bg-background-200">
                     <img
-                      src={video.thumbnail}
+                      src={video.thumbnail || noThumbnail}
                       alt={video.title}
                       className="w-full h-full object-cover object-top"
                       loading="lazy"
@@ -293,9 +294,9 @@ export default function DashboardPage() {
                       <div className="flex-shrink-0">{getStatusBadge(status)}</div>
                     </div>
                     <div className="flex items-center gap-3 mt-1.5 text-xs text-foreground-500">
-                      <span className="flex items-center gap-1">
+                      {/* <span className="flex items-center gap-1">
                         <i className="ri-time-line"></i> {video.duration}
-                      </span>
+                      </span> */}
                       {prog && prog.attempts > 0 && (
                         <span className="flex items-center gap-1">
                           <i className="ri-refresh-line"></i> {prog.attempts} attempt{prog.attempts > 1 ? 's' : ''}

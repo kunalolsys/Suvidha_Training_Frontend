@@ -31,7 +31,7 @@ export default function AdminDashboardPage() {
   });
   const fetchStats = async () => {
     try {
-      setLoading(true);
+      // setLoading(true);
       const res = await api.get(`${API.DASHBOARD}/stats`,);
 
       setDashboardRecord(res.data);
@@ -39,7 +39,7 @@ export default function AdminDashboardPage() {
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      // setLoading(false);
     }
   };
   const fetchEmpProgress = async () => {
@@ -61,7 +61,7 @@ export default function AdminDashboardPage() {
   };
   const fetchVideoByDesignation = async () => {
     try {
-      setLoading(true);
+      // setLoading(true);
       const res = await api.get(`${API.DASHBOARD}/videos-by-designation`,);
 
       setVideosByDesg(res.data);
@@ -69,7 +69,7 @@ export default function AdminDashboardPage() {
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      // setLoading(false);
     }
   };
   useEffect(() => {
@@ -326,45 +326,81 @@ export default function AdminDashboardPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-background-100">
-                  {employeeProgress
-                    .map((ep) => {
-                      return (
-                        <tr key={ep._id} className="hover:bg-background-50/70 transition-colors">
-                          <td className="px-5 py-3">
-                            <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xs font-semibold">
-                                {getInitials(ep.name)}
+                  {loading ? Array.from({ length: 10 }).map((_, index) => (
+                    <tr key={index} className="animate-pulse">
+                      <td className="px-5 py-3 text-center">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-lg bg-gray-200"></div>
+                          <div className="h-4 w-32 bg-gray-200 rounded"></div>
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-3 text-center">
+                        <div className="h-4 w-10 bg-gray-200 rounded mx-auto"></div>
+                      </td>
+
+                      <td className="px-5 py-3 text-center">
+                        <div className="flex justify-center gap-2">
+                          <div className="h-4 w-12 bg-gray-200 rounded"></div>
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-3 text-center">
+                        <div>
+                          <div className="h-4 w-28 bg-gray-200 rounded mb-1"></div>
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-3 text-center">
+                        <div className="h-5 w-8 bg-gray-200 rounded-full mx-auto"></div>
+                      </td>
+                      <td className="px-5 py-3 text-center">
+                        <div className="h-5 w-8 bg-gray-200 rounded-full mx-auto"></div>
+                      </td>
+                      <td className="px-5 py-3 text-center">
+                        <div className="h-5 w-8 bg-gray-200 rounded-full mx-auto"></div>
+                      </td>
+                    </tr>
+                  ))
+                    : employeeProgress
+                      .map((ep) => {
+                        return (
+                          <tr key={ep._id} className="hover:bg-background-50/70 transition-colors">
+                            <td className="px-5 py-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xs font-semibold">
+                                  {getInitials(ep.name)}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-foreground-900">{ep.name}</p>
+                                  <p className="text-xs text-foreground-500">{ep.email}</p>
+                                </div>
                               </div>
-                              <div>
-                                <p className="text-sm font-medium text-foreground-900">{ep.name}</p>
-                                <p className="text-xs text-foreground-500">{ep.email}</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-5 py-3">
-                            {/* <span className="text-xs text-foreground-400 font-mono">{ep.employee.storeId}</span> */}
-                            <p className="text-sm text-foreground-700">{ep.store}</p>
-                          </td>
-                          <td className="px-5 py-3">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-secondary-100 text-secondary-700">
-                              {ep.designation}
-                            </span>
-                          </td>
-                          <td className="px-5 py-3 text-sm text-foreground-700 text-center">{ep.videos}</td>
-                          <td className="px-5 py-3 text-sm text-foreground-700 text-center">
-                            <span className={`font-medium ${ep.videos > 0 ? 'text-accent-600' : 'text-foreground-700'}`}>
-                              {ep.completed}
-                            </span>
-                          </td>
-                          <td className="px-5 py-3 text-sm text-foreground-700 text-center">{ep.attempts}</td>
-                          <td className="px-5 py-3 text-center">
-                            <span className={`text-sm font-medium ${ep.passRateNum >= 70 ? 'text-accent-600' : ep.passRateNum >= 40 ? 'text-amber-600' : 'text-red-600'}`}>
-                              {ep.passRate}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                            </td>
+                            <td className="px-5 py-3">
+                              {/* <span className="text-xs text-foreground-400 font-mono">{ep.employee.storeId}</span> */}
+                              <p className="text-sm text-foreground-700">{ep.store}</p>
+                            </td>
+                            <td className="px-5 py-3">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-secondary-100 text-secondary-700">
+                                {ep.designation}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3 text-sm text-foreground-700 text-center">{ep.videos}</td>
+                            <td className="px-5 py-3 text-sm text-foreground-700 text-center">
+                              <span className={`font-medium ${ep.videos > 0 ? 'text-accent-600' : 'text-foreground-700'}`}>
+                                {ep.completed}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3 text-sm text-foreground-700 text-center">{ep.attempts}</td>
+                            <td className="px-5 py-3 text-center">
+                              <span className={`text-sm font-medium ${ep.passRateNum >= 70 ? 'text-accent-600' : ep.passRateNum >= 40 ? 'text-amber-600' : 'text-red-600'}`}>
+                                {ep.passRate}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
                 </tbody>
               </table>
             </div>
