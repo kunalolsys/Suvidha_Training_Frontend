@@ -116,6 +116,7 @@ export default function AdminQuestionsPage() {
   };
 
   const openEdit = (id: string) => {
+    setImportMode("manual")
     const q = questions.find((x) => x._id === id);
     if (!q) return;
 
@@ -363,8 +364,8 @@ export default function AdminQuestionsPage() {
                   {questions.map((q) => (
                     <tr key={q._id} className="hover:bg-background-100/50 transition-colors">
                       <td className="px-5 py-3 text-sm text-foreground-500 font-mono">{q.questionId}</td>
-                      <td className="px-5 py-3 text-sm text-foreground-600 max-w-[160px] truncate">{getVideoTitle(q.video.title)}</td>
-                      <td className="px-5 py-3 text-sm text-foreground-900 font-medium max-w-[240px] truncate">{q.question}</td>
+                      <td className="px-5 py-3 text-sm text-foreground-600  truncate">{getVideoTitle(q.video.title)}</td>
+                      <td className="px-5 py-3 text-sm text-foreground-900 font-medium max-w-[300px] truncate">{q.question}</td>
                       <td className="px-5 py-3 text-sm text-foreground-600">{q.options.filter(Boolean).length}</td>
                       <td className="px-5 py-3">
                         <span className="text-xs px-2 py-0.5 rounded-full bg-accent-100 text-accent-700 font-medium uppercase">  {q.options.find((opt) => opt.isCorrect)?.option || "-"}

@@ -11,7 +11,7 @@ import { message, Select } from 'antd';
 interface VideoForm {
   title: string;
   veedUrl: string;
-  designation: string;
+  designation: [];
   sortOrder: number;
   // duration: string;
   thumbnail: string;
@@ -20,7 +20,7 @@ interface VideoForm {
 const defaultForm: VideoForm = {
   title: '',
   veedUrl: '',
-  designation: '',
+  designation: [],
   sortOrder: 1,
   // duration: '10:00',
   thumbnail: '',
@@ -32,7 +32,7 @@ export default function AdminVideosPage() {
   const [designations, setDesignations] = useState([]);
 
   const [search, setSearch] = useState('');
-  const [filterDesignation, setFilterDesignation] = useState<string>('');
+  const [filterDesignation, setFilterDesignation] = useState([]);
   const [showDrawer, setShowDrawer] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<VideoForm>(defaultForm);
@@ -115,7 +115,7 @@ export default function AdminVideosPage() {
     setForm({
       title: v.title,
       veedUrl: v.veedUrl,
-      designation: v.designation._id,
+      designation: v.designation.map((item) => item._id),
       sortOrder: v.sortOrder,
       // duration: v.duration,
       thumbnail: v.thumbnail,
@@ -248,7 +248,7 @@ export default function AdminVideosPage() {
                   <tr className="bg-background-100 border-b border-background-200">
                     <th className="px-5 py-3 text-xs font-semibold text-foreground-600">ID</th>
                     <th className="px-5 py-3 text-xs font-semibold text-foreground-600">Title</th>
-                    <th className="px-5 py-3 text-xs font-semibold text-foreground-600">Designation</th>
+                    <th className="px-5 py-3 text-xs font-semibold text-foreground-600">Designations</th>
                     <th className="px-5 py-3 text-xs font-semibold text-foreground-600">Order</th>
                     {/* <th className="px-5 py-3 text-xs font-semibold text-foreground-600">Duration</th> */}
                     <th className="px-5 py-3 text-xs font-semibold text-foreground-600 text-right">Actions</th>
@@ -260,7 +260,33 @@ export default function AdminVideosPage() {
                       <td className="px-5 py-3 text-sm text-foreground-500 font-mono">{v.videoId}</td>
                       <td className="px-5 py-3 text-sm text-foreground-900 font-medium">{v.title}</td>
                       <td className="px-5 py-3">
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-primary-100 text-primary-700 font-medium">{v.designation.name}</span>
+                        <div className="flex flex-wrap items-center gap-1.5 max-w-[280px]">
+                          {Array.isArray(v.designation) && v.designation.length > 0 ? (
+                            <>
+                              {/* Render only the first 2 designations to keep rows compact */}
+                              {v.designation.slice(0, 2).map((d) => (
+                                <span
+                                  key={d._id}
+                                  className="text-[10px] tracking-wide inline-block whitespace-nowrap px-2 py-0.5 rounded-full bg-primary-100 text-primary-700 font-medium"
+                                >
+                                  {d.name}
+                                </span>
+                              ))}
+
+                              {/* If there are more than 2, show a clean counter bubble */}
+                              {v.designation.length > 2 && (
+                                <span
+                                  title={v.designation.slice(2).map(d => d.name).join(', ')}
+                                  className="text-[10px] tracking-wide inline-block whitespace-nowrap px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-semibold cursor-help"
+                                >
+                                  +{v.designation.length - 2} More
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-xs text-gray-400 italic">No Designations</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-5 py-3 text-sm text-foreground-600">{v.sortOrder}</td>
                       {/* <td className="px-5 py-3 text-sm text-foreground-600">{v.duration}</td> */}
@@ -352,23 +378,23 @@ export default function AdminVideosPage() {
                   <div>
                     <label className="block text-sm font-medium text-foreground-700 mb-2">Designation <span className="text-red-500">*</span></label>
                     <Select
-                      value={form.designation}
-                      placeholder="All Designations"
+                      mode="multiple" // Enables multi-select tag view
+                      maxTagCount="responsive" // Dynamically collapses tags when they overflow row layout bounds
+                      value={Array.isArray(form.designation) ? form.designation : []} // Fallback to an empty array if state is old string value
+                      placeholder="Select Designations"
                       allowClear
                       showSearch
                       optionFilterProp="label"
-                      onChange={(value) => updateField('designation', value)}
-                      className="w-full px-3 py-2.5 border border-background-200 rounded-lg text-sm text-foreground-900 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 transition-all cursor-pointer"
-                      options={[
-                        {
-                          label: "Select option",
-                          value: "",
-                        },
-                        ...designations.map((d) => ({
-                          label: d.name,
-                          value: d._id,
-                        })),
-                      ]}
+                      onChange={(value) => updateField('designation', value)} // value will automatically pass as an array of IDs: ["id1", "id2"]
+
+                      // Note: Removed full block paddings (px-3 py-2.5) because Ant Design multiple select manages 
+                      // its internal tag layout height dynamically. Adding direct padding breaks tag styling alignments.
+                      className="w-full text-sm border border-background-200 rounded-lg text-foreground-900 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 transition-all cursor-pointer min-h-[42px]"
+
+                      options={designations.map((d) => ({
+                        label: d.name,
+                        value: d._id,
+                      }))}
                     />
                     {errors.designation && <p className="text-xs text-red-500 mt-1">{errors.designation}</p>}
                   </div>

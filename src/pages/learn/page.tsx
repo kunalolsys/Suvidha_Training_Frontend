@@ -246,9 +246,9 @@ export default function LearnPage() {
 
       <main className="max-w-6xl mx-auto px-4 md:px-6 py-8">
         <div className="mb-6">
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary-100 text-primary-700 text-xs font-medium mb-3">
+          {/* <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary-100 text-primary-700 text-xs font-medium mb-3">
             {video.designation ? video.designation.name : ""}
-          </span>
+          </span> */}
           <h1 className="font-heading text-2xl md:text-3xl text-foreground-900 mb-2">{video.title}</h1>
           <div className="flex items-center gap-4 text-sm text-foreground-500">
             {/* <span className="flex items-center gap-1">
