@@ -41,10 +41,30 @@ export default function AdminEmployeesPage() {
   const modalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [loading, setLoading] = useState(false)
   const debouncedSearch = useDebounce(search);
+  const [syncResult, setSyncResult] = useState(null);
+  const [lastSyncTime, setLastSyncTime] = useState(null);
+  const syncEmployees = async () => {
+    try {
+      setLoading(true);
+
+      const res = await api.post(`${API.USER}/sync-stu-employees`);
+      setSyncResult(res);
+      setLastSyncTime(new Date());
+      setTimeout(() => {
+        setSyncResult(null);
+      }, 10000);
+      await fetchEmployees();
+    } catch (err) {
+      console.log(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   const fetchEmployees = async () => {
     try {
-      setLoading(true);
+      // setLoading(true);
       const res = await api.get(`${API.USER}`, {
         page,
         limit: pagination.limit,
@@ -59,12 +79,11 @@ export default function AdminEmployeesPage() {
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      // setLoading(false);
     }
   };
   const fetchDesignations = async () => {
     try {
-      setLoading(true);
       const res = await api.get(`${API.DESIGNATION}/all`, {});
 
       setDesignations(res.data.designations);
@@ -72,12 +91,12 @@ export default function AdminEmployeesPage() {
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      // setLoading(false);
     }
   };
   const fetchStores = async () => {
     try {
-      setLoading(true);
+      // setLoading(true);
       const res = await api.get(`${API.STORE}/all`, {});
 
       setStores(res.data.stores);
@@ -85,20 +104,27 @@ export default function AdminEmployeesPage() {
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      // setLoading(false);
     }
   };
   // Cleanup timer on unmount
   useEffect(() => {
-    fetchEmployees();
-    fetchStores();
-    fetchDesignations();
+    const init = async () => {
+      fetchEmployees();
+      fetchStores();
+      fetchDesignations();
+    };
+
+    init();
 
     return () => {
       if (modalTimerRef.current) {
         clearTimeout(modalTimerRef.current);
       }
     };
+  }, []);
+  useEffect(() => {
+    fetchEmployees();
   }, [page, debouncedSearch, designationFilter, storeFilter]);
   useEffect(() => {
     setPage(1);
@@ -239,10 +265,146 @@ export default function AdminEmployeesPage() {
               <i className="ri-add-line text-lg"></i>
               Add Employee
             </button> */}
+            <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-background-200 bg-background-50 p-4">
 
-            <EmployeeImportModal />
+              <div>
+                <h3 className="text-sm font-semibold text-foreground-900">
+                  Employee Synchronization
+                </h3>
+
+                <p className="mt-1 text-xs text-foreground-500">
+                  Sync employees from the STU master database.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+
+                {lastSyncTime && (
+                  <div className="flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-2">
+                    <div className="h-2 w-2 rounded-full bg-emerald-500"></div>
+
+                    <div className="text-xs">
+                      <p className="font-medium text-emerald-700">
+                        Last Sync
+                      </p>
+
+                      <p className="text-emerald-600">
+                        {lastSyncTime.toLocaleString("en-IN", {
+                          day: "2-digit",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={syncEmployees}
+                  disabled={loading}
+                  className={`group inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition-all duration-300
+    ${loading
+                      ? "cursor-not-allowed bg-slate-300 text-white"
+                      : "bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow hover:shadow-md hover:-translate-y-0.5"
+                    }`}
+                >
+                  <i
+                    className={`text-base ${loading
+                        ? "ri-loader-4-line animate-spin"
+                        : "ri-refresh-line transition-transform duration-500 group-hover:rotate-180"
+                      }`}
+                  />
+
+                  <span>{loading ? "Syncing..." : "Sync"}</span>
+                </button>
+
+                <EmployeeImportModal />
+
+              </div>
+            </div>
           </div>
+          {syncResult && !loading && (
+            <div className="mb-6 rounded-xl border border-green-200 bg-white shadow-sm">
+              <div className="border-b border-green-100 bg-green-50 px-5 py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
+                      <i className="ri-checkbox-circle-fill text-xl text-green-600"></i>
+                    </div>
 
+                    <div>
+                      <h3 className="font-semibold text-gray-900">
+                        Employee Synchronization Completed
+                      </h3>
+
+                      <p className="text-sm text-gray-500">
+                        {syncResult.message}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg bg-primary-50 px-4 py-2 text-center">
+                    <div className="text-xl font-bold text-primary-600">
+                      {syncResult.totalFromSTU}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      STU Employees
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 p-5 md:grid-cols-5">
+
+                <div className="rounded-lg border p-4">
+                  <div className="text-2xl font-bold text-green-600">
+                    {syncResult.created}
+                  </div>
+                  <div className="mt-1 text-sm text-gray-500">
+                    Created
+                  </div>
+                </div>
+
+                <div className="rounded-lg border p-4">
+                  <div className="text-2xl font-bold text-blue-600">
+                    {syncResult.updated}
+                  </div>
+                  <div className="mt-1 text-sm text-gray-500">
+                    Updated
+                  </div>
+                </div>
+
+                <div className="rounded-lg border p-4">
+                  <div className="text-2xl font-bold text-amber-600">
+                    {syncResult.skipped}
+                  </div>
+                  <div className="mt-1 text-sm text-gray-500">
+                    Duplicates & Skipped
+                  </div>
+                </div>
+
+                <div className="rounded-lg border p-4">
+                  <div className="text-2xl font-bold text-emerald-600">
+                    {syncResult.activated}
+                  </div>
+                  <div className="mt-1 text-sm text-gray-500">
+                    Activated
+                  </div>
+                </div>
+
+                <div className="rounded-lg border p-4">
+                  <div className="text-2xl font-bold text-red-600">
+                    {syncResult.deactivated}
+                  </div>
+                  <div className="mt-1 text-sm text-gray-500">
+                    Deactivated
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          )}
           {/* Filters */}
           <div className="flex flex-col sm:flex-row gap-3 mb-6">
             <div className="relative flex-1">
@@ -301,7 +463,7 @@ export default function AdminEmployeesPage() {
                   <tr className="border-b border-background-200">
                     <th className="px-4 py-3">Employee Name</th>
                     <th className="px-4 py-3">Employee Code</th>
-                    <th className="px-4 py-3">Email</th>
+                    {/* <th className="px-4 py-3">Email</th> */}
                     <th className="px-4 py-3">Store</th>
                     <th className="px-4 py-3">Designation</th>
                     <th className="px-4 py-3 text-right">Actions</th>
@@ -340,9 +502,9 @@ export default function AdminEmployeesPage() {
                           {emp.employeeId}
                         </td>
 
-                        <td className="px-4 py-3 text-sm text-foreground-600">
+                        {/* <td className="px-4 py-3 text-sm text-foreground-600">
                           {emp.email}
-                        </td>
+                        </td> */}
 
                         <td className="px-4 py-3">
                           <span className="text-sm text-foreground-700">
