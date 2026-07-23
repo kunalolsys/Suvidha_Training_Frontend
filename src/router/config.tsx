@@ -10,6 +10,7 @@ import AdminQuestionsPage from "@/pages/admin/questions/page";
 
 import AdminEmployeesPage from "@/pages/admin/employees/page";
 import AdminReportsPage from "@/pages/admin/reports/page";
+import VimeoTest from "@/pages/admin/vimeo";
 
 const routes: RouteObject[] = [
   {
@@ -35,6 +36,9 @@ const routes: RouteObject[] = [
   {
     path: "/admin/videos",
     element: <AdminVideosPage />,
+  },{
+    path: "/admin/vimeo",
+    element: <VimeoTest />,
   },
   {
     path: "/admin/questions",

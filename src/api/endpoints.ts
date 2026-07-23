@@ -21,4 +21,6 @@ export const API = {
   DASHBOARD: `${API_BASE_URL}/dashboard`,
 
   PROGRESS: `${API_BASE_URL}/progress`,
+
+  VIMEO: `${API_BASE_URL}/vimeo`,
 };

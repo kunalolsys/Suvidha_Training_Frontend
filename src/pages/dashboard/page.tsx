@@ -322,15 +322,27 @@ export default function DashboardPage() {
               );
             })}
           </div>
-          {designationVideos.length === 0 && (
+          {loading ? (
+            <div className="text-center py-16 bg-background-50 border border-background-200 rounded-2xl">
+              <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-background-100 flex items-center justify-center">
+                <i className="ri-loader-4-line text-2xl text-primary-500 animate-spin"></i>
+              </div>
+              <p className="text-foreground-600 font-medium">Loading training videos...</p>
+              <p className="text-sm text-foreground-500 mt-1">
+                Please wait while we fetch your assigned modules.
+              </p>
+            </div>
+          ) : !Array.isArray(designationVideos) || designationVideos.length === 0 ? (
             <div className="text-center py-16 bg-background-50 border border-background-200 rounded-2xl">
               <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-background-100 flex items-center justify-center">
                 <i className="ri-video-line text-2xl text-foreground-400"></i>
               </div>
               <p className="text-foreground-600 font-medium">No training videos assigned yet</p>
-              <p className="text-sm text-foreground-500 mt-1">Your administrator will assign videos for your designation.</p>
+              <p className="text-sm text-foreground-500 mt-1">
+                Your administrator will assign videos for your designation.
+              </p>
             </div>
-          )}
+          ) : null}
         </div>
         {/* Training History */}
         <div className="mt-12">

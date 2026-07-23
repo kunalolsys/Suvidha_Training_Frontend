@@ -49,36 +49,36 @@ export default function LearnPage() {
   };
   const fetchVideos = async () => {
     try {
-      setLoading(true);
+      // setLoading(true);
       const res = await api.get(`${API.VIDEO}/${videoId}`);
       setVideo(res.data.video);
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      // setLoading(false);
     }
   };
   const fetchQuestions = async () => {
     try {
-      setLoading(true);
+      // setLoading(true);
       const res = await api.get(`${API.QUESTION}/${videoId}`);
       setQuestions(res.data.questions);
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      // setLoading(false);
     }
   };
   const fetchProgress = async () => {
     try {
-      setLoading(true);
+      // setLoading(true);
       const res = await api.get(`${API.PROGRESS}/my-dashboard`);
 
       setProgressList(res.data);
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      // setLoading(false);
     }
   };
   useEffect(() => {
@@ -182,6 +182,25 @@ export default function LearnPage() {
     return <Navigate to="/" replace />;
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background-50 px-4">
+        <div className="text-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-background-100 flex items-center justify-center">
+            <i className="ri-loader-4-line text-3xl text-primary-500 animate-spin"></i>
+          </div>
+          <h2 className="font-heading text-lg text-foreground-900 mb-1">
+            Loading Video...
+          </h2>
+          <p className="text-xs text-foreground-500">
+            Please wait while we fetch the details.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. NOT FOUND STATE
   if (!video) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background-50 px-4">
@@ -189,8 +208,12 @@ export default function LearnPage() {
           <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-background-100 flex items-center justify-center">
             <i className="ri-video-off-line text-2xl text-foreground-400"></i>
           </div>
-          <h2 className="font-heading text-xl text-foreground-900 mb-2">Video Not Found</h2>
-          <p className="text-sm text-foreground-500 mb-6">This training video doesn't exist or has been removed.</p>
+          <h2 className="font-heading text-xl text-foreground-900 mb-2">
+            Video Not Found
+          </h2>
+          <p className="text-sm text-foreground-500 mb-6">
+            This training video doesn't exist or has been removed.
+          </p>
           <button
             onClick={() => navigate('/dashboard')}
             className="px-6 py-2.5 bg-primary-500 hover:bg-primary-600 text-background-50 font-medium rounded-xl text-sm transition-colors whitespace-nowrap cursor-pointer"
@@ -264,6 +287,7 @@ export default function LearnPage() {
 
         <VideoPlayer
           videoUrl={video.veedUrl}
+          vimeoId={video.vimeoId}
           // videoUrl={"https://veed.io/view/3cb0a71c-f9e1-466b-a9da-3a796615585a"}
           title={video.title}
           completed={videoCompleted}

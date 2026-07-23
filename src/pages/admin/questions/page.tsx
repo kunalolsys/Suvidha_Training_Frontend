@@ -79,7 +79,7 @@ export default function AdminQuestionsPage() {
   };
   const fetchVideos = async () => {
     try {
-      setLoading(true);
+      // setLoading(true);
       const res = await api.get(`${API.VIDEO}/all`,);
 
       setVideos(res.data.videos);
@@ -87,7 +87,7 @@ export default function AdminQuestionsPage() {
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      // setLoading(false);
     }
   };
   useEffect(() => {
@@ -361,38 +361,63 @@ export default function AdminQuestionsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-background-100">
-                  {questions.map((q) => (
-                    <tr key={q._id} className="hover:bg-background-100/50 transition-colors">
-                      <td className="px-5 py-3 text-sm text-foreground-500 font-mono">{q.questionId}</td>
-                      <td className="px-5 py-3 text-sm text-foreground-600  truncate">{getVideoTitle(q.video.title)}</td>
-                      <td className="px-5 py-3 text-sm text-foreground-900 font-medium max-w-[300px] truncate">{q.question}</td>
-                      <td className="px-5 py-3 text-sm text-foreground-600">{q.options.filter(Boolean).length}</td>
-                      <td className="px-5 py-3">
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-accent-100 text-accent-700 font-medium uppercase">  {q.options.find((opt) => opt.isCorrect)?.option || "-"}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3">
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-accent-100 text-accent-700 font-medium uppercase">  {q.sortOrder || "-"}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button onClick={() => openEdit(q._id)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-background-200 text-foreground-500 hover:text-foreground-700 transition-colors cursor-pointer">
-                            <i className="ri-pencil-line text-base"></i>
-                          </button>
-                          <button onClick={() => setDeleteId(q._id)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-100 text-foreground-500 hover:text-red-500 transition-colors cursor-pointer">
-                            <i className="ri-delete-bin-line text-base"></i>
-                          </button>
+                  {/* 1. Loading State */}
+                  {loading ? (
+                    <tr>
+                      <td colSpan={7} className="h-[450px] text-center">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <i className="ri-loader-4-line text-2xl text-primary-500 animate-spin"></i>
+                          <span className="text-sm text-foreground-500 font-medium">Loading questions...</span>
                         </div>
                       </td>
                     </tr>
-                  ))}
-                  {questions.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="px-5 py-10 text-center text-sm text-foreground-500">
-                        No questions found matching your search.
-                      </td>
-                    </tr>
+                  ) : (
+                    <>
+                      {/* 2. Questions Mapping */}
+                      {questions.map((q) => (
+                        <tr key={q._id} className="hover:bg-background-100/50 transition-colors">
+                          <td className="px-5 py-3 text-sm text-foreground-500 font-mono">{q.questionId}</td>
+                          <td className="px-5 py-3 text-sm text-foreground-600 truncate">{getVideoTitle(q.video?.title)}</td>
+                          <td className="px-5 py-3 text-sm text-foreground-900 font-medium max-w-[300px] truncate">{q.question}</td>
+                          <td className="px-5 py-3 text-sm text-foreground-600">{q.options?.filter(Boolean).length}</td>
+                          <td className="px-5 py-3">
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-accent-100 text-accent-700 font-medium uppercase">
+                              {q.options?.find((opt) => opt.isCorrect)?.option || "-"}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3">
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-accent-100 text-accent-700 font-medium uppercase">
+                              {q.sortOrder || "-"}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => openEdit(q._id)}
+                                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-background-200 text-foreground-500 hover:text-foreground-700 transition-colors cursor-pointer"
+                              >
+                                <i className="ri-pencil-line text-base"></i>
+                              </button>
+                              <button
+                                onClick={() => setDeleteId(q._id)}
+                                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-100 text-foreground-500 hover:text-red-500 transition-colors cursor-pointer"
+                              >
+                                <i className="ri-delete-bin-line text-base"></i>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+
+                      {/* 3. Empty State */}
+                      {questions.length === 0 && (
+                        <tr>
+                          <td colSpan={7} className="px-5 py-10 text-center text-sm text-foreground-500">
+                            No questions found matching your search.
+                          </td>
+                        </tr>
+                      )}
+                    </>
                   )}
                 </tbody>
               </table>

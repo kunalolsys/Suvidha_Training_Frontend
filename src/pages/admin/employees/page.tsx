@@ -64,7 +64,7 @@ export default function AdminEmployeesPage() {
 
   const fetchEmployees = async () => {
     try {
-      // setLoading(true);
+      setLoading(true);
       const res = await api.get(`${API.USER}`, {
         page,
         limit: pagination.limit,
@@ -79,7 +79,7 @@ export default function AdminEmployeesPage() {
     } catch (err) {
       console.error(err);
     } finally {
-      // setLoading(false);
+      setLoading(false);
     }
   };
   const fetchDesignations = async () => {
@@ -300,7 +300,7 @@ export default function AdminEmployeesPage() {
                   </div>
                 )}
 
-                <button
+                {/* <button
                   onClick={syncEmployees}
                   disabled={loading}
                   className={`group inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition-all duration-300
@@ -317,7 +317,7 @@ export default function AdminEmployeesPage() {
                   />
 
                   <span>{loading ? "Syncing..." : "Sync"}</span>
-                </button>
+                </button> */}
 
                 <EmployeeImportModal />
 
@@ -472,7 +472,18 @@ export default function AdminEmployeesPage() {
 
 
                 <tbody className="divide-y divide-background-100">
-                  {employees.length === 0 ? (
+                  {/* 1. Loading State */}
+                  {loading ? (
+                    <tr>
+                      <td colSpan={5} className="h-[450px] text-center">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <i className="ri-loader-4-line text-2xl text-primary-500 animate-spin"></i>
+                          <span className="text-sm text-foreground-500 font-medium">Loading employees...</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : employees.length === 0 ? (
+                    /* 2. Empty State */
                     <tr>
                       <td
                         colSpan={5}
@@ -483,9 +494,10 @@ export default function AdminEmployeesPage() {
                       </td>
                     </tr>
                   ) : (
+                    /* 3. Employees Mapping */
                     employees.map((emp) => (
                       <tr
-                        key={emp.employeeId}
+                        key={emp.employeeId || emp._id}
                         className="hover:bg-background-50/70 transition-colors"
                       >
                         <td className="px-4 py-3">
@@ -494,27 +506,23 @@ export default function AdminEmployeesPage() {
                               {getInitials(emp.name)}
                             </div>
                             <span className="text-sm font-medium text-foreground-900">
-                              {emp.name}
+                              {emp.name || ""}
                             </span>
                           </div>
                         </td>
                         <td className="px-4 py-3 text-sm text-foreground-600">
-                          {emp.employeeId}
+                          {emp.employeeId || ""}
                         </td>
-
-                        {/* <td className="px-4 py-3 text-sm text-foreground-600">
-                          {emp.email}
-                        </td> */}
 
                         <td className="px-4 py-3">
                           <span className="text-sm text-foreground-700">
-                            {emp.store.name}
+                            {emp.store?.name || ""}
                           </span>
                         </td>
 
                         <td className="px-4 py-3">
                           <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-secondary-100 text-secondary-700">
-                            {emp.designation.name}
+                            {emp.designation?.name || ""}
                           </span>
                         </td>
 
@@ -526,13 +534,6 @@ export default function AdminEmployeesPage() {
                             >
                               <i className="ri-edit-line text-lg"></i>
                             </button>
-
-                            {/* <button
-                              onClick={() => setDeleteConfirmId(emp._id)}
-                              className="p-2 text-foreground-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            >
-                              <i className="ri-delete-bin-line text-lg"></i>
-                            </button> */}
                           </div>
                         </td>
                       </tr>

@@ -11,6 +11,7 @@ import { message, Select } from 'antd';
 interface VideoForm {
   title: string;
   veedUrl: string;
+  vimeoId: string;
   designation: [];
   sortOrder: number;
   // duration: string;
@@ -20,6 +21,7 @@ interface VideoForm {
 const defaultForm: VideoForm = {
   title: '',
   veedUrl: '',
+  vimeoId: '',
   designation: [],
   sortOrder: 1,
   // duration: '10:00',
@@ -71,7 +73,7 @@ export default function AdminVideosPage() {
   };
   const fetchDesignations = async () => {
     try {
-      setLoading(true);
+      // setLoading(true);
       const res = await api.get(`${API.DESIGNATION}/all`, {});
 
       setDesignations(res.data.designations);
@@ -79,7 +81,7 @@ export default function AdminVideosPage() {
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      // setLoading(false);
     }
   };
   // Cleanup timer on unmount
@@ -115,6 +117,7 @@ export default function AdminVideosPage() {
     setForm({
       title: v.title,
       veedUrl: v.veedUrl,
+      vimeoId: v.vimeoId,
       designation: v.designation.map((item) => item._id),
       sortOrder: v.sortOrder,
       // duration: v.duration,
@@ -126,11 +129,25 @@ export default function AdminVideosPage() {
 
   const validate = (): boolean => {
     const newErrors: Partial<Record<keyof VideoForm, string>> = {};
-    if (!form.title.trim()) newErrors.title = 'Video title is required';
-    if (!form.designation) newErrors.designation = 'Designation is required';
-    if (!form.veedUrl.trim()) newErrors.veedUrl = 'Vedio URL is required';
-    // if (!form.duration.trim()) newErrors.duration = 'Duration is required';
+
+    if (!form.title?.trim()) newErrors.title = 'Video title is required';
+
+    // Check if designation is selected (handles both array and string checks safely)
+    if (!form.designation || (Array.isArray(form.designation) && form.designation.length === 0)) {
+      newErrors.designation = 'Designation is required';
+    }
+
+    // Require AT LEAST ONE: veedUrl OR vimeoId
+    const hasVeed = Boolean(form.veedUrl?.trim());
+    const hasVimeo = Boolean(form.vimeoId?.trim());
+
+    if (!hasVeed && !hasVimeo) {
+      newErrors.veedUrl = 'Provide either Video URL or Vimeo ID';
+      newErrors.vimeoId = 'Provide either Video URL or Vimeo ID';
+    }
+
     if (form.sortOrder < 1) newErrors.sortOrder = 'Sequence order must be at least 1';
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -255,59 +272,82 @@ export default function AdminVideosPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-background-100">
-                  {videos.map((v) => (
-                    <tr key={v._id} className="hover:bg-background-100/50 transition-colors">
-                      <td className="px-5 py-3 text-sm text-foreground-500 font-mono">{v.videoId}</td>
-                      <td className="px-5 py-3 text-sm text-foreground-900 font-medium">{v.title}</td>
-                      <td className="px-5 py-3">
-                        <div className="flex flex-wrap items-center gap-1.5 max-w-[280px]">
-                          {Array.isArray(v.designation) && v.designation.length > 0 ? (
-                            <>
-                              {/* Render only the first 2 designations to keep rows compact */}
-                              {v.designation.slice(0, 2).map((d) => (
-                                <span
-                                  key={d._id}
-                                  className="text-[10px] tracking-wide inline-block whitespace-nowrap px-2 py-0.5 rounded-full bg-primary-100 text-primary-700 font-medium"
-                                >
-                                  {d.name}
-                                </span>
-                              ))}
-
-                              {/* If there are more than 2, show a clean counter bubble */}
-                              {v.designation.length > 2 && (
-                                <span
-                                  title={v.designation.slice(2).map(d => d.name).join(', ')}
-                                  className="text-[10px] tracking-wide inline-block whitespace-nowrap px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-semibold cursor-help"
-                                >
-                                  +{v.designation.length - 2} More
-                                </span>
-                              )}
-                            </>
-                          ) : (
-                            <span className="text-xs text-gray-400 italic">No Designations</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-5 py-3 text-sm text-foreground-600">{v.sortOrder}</td>
-                      {/* <td className="px-5 py-3 text-sm text-foreground-600">{v.duration}</td> */}
-                      <td className="px-5 py-3 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button onClick={() => openEdit(v._id)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-background-200 text-foreground-500 hover:text-foreground-700 transition-colors cursor-pointer">
-                            <i className="ri-pencil-line text-base"></i>
-                          </button>
-                          <button onClick={() => setDeleteId(v._id)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-100 text-foreground-500 hover:text-red-500 transition-colors cursor-pointer">
-                            <i className="ri-delete-bin-line text-base"></i>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {videos.length === 0 && (
+                  {/* 1. Loading State Indicator */}
+                  {loading ? (
                     <tr>
-                      <td colSpan={6} className="px-5 py-10 text-center text-sm text-foreground-500">
-                        No videos found matching your search.
+                      <td colSpan={6} className="h-[450px] text-center">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          {/* Remix Icon Spinner (Agar Remix Icons missing hon to SVG fallback work karega) */}
+                          <i className="ri-loader-4-line text-2xl text-primary-500 animate-spin"></i>
+                          <span className="text-sm text-foreground-500 font-medium">Loading videos...</span>
+                        </div>
                       </td>
                     </tr>
+                  ) : (
+                    <>
+                      {/* 2. Video List Mapping */}
+                      {videos.map((v) => (
+                        <tr key={v._id} className="hover:bg-background-100/50 transition-colors">
+                          <td className="px-5 py-3 text-sm text-foreground-500 font-mono">{v.videoId}</td>
+                          <td className="px-5 py-3 text-sm text-foreground-900 font-medium">{v.title}</td>
+                          <td className="px-5 py-3">
+                            <div className="flex flex-wrap items-center gap-1.5 max-w-[280px]">
+                              {Array.isArray(v.designation) && v.designation.length > 0 ? (
+                                <>
+                                  {/* Render only the first 2 designations */}
+                                  {v.designation.slice(0, 2).map((d) => (
+                                    <span
+                                      key={d._id}
+                                      className="text-[10px] tracking-wide inline-block whitespace-nowrap px-2 py-0.5 rounded-full bg-primary-100 text-primary-700 font-medium"
+                                    >
+                                      {d.name}
+                                    </span>
+                                  ))}
+
+                                  {/* Counter bubble for remaining designations */}
+                                  {v.designation.length > 2 && (
+                                    <span
+                                      title={v.designation.slice(2).map((d) => d.name).join(", ")}
+                                      className="text-[10px] tracking-wide inline-block whitespace-nowrap px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-semibold cursor-help"
+                                    >
+                                      +{v.designation.length - 2} More
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-xs text-gray-400 italic">No Designations</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-5 py-3 text-sm text-foreground-600">{v.sortOrder}</td>
+                          <td className="px-5 py-3 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => openEdit(v._id)}
+                                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-background-200 text-foreground-500 hover:text-foreground-700 transition-colors cursor-pointer"
+                              >
+                                <i className="ri-pencil-line text-base"></i>
+                              </button>
+                              <button
+                                onClick={() => setDeleteId(v._id)}
+                                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-100 text-foreground-500 hover:text-red-500 transition-colors cursor-pointer"
+                              >
+                                <i className="ri-delete-bin-line text-base"></i>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+
+                      {/* 3. Empty State Indicator */}
+                      {videos.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="px-5 py-10 text-center text-sm text-foreground-500">
+                            No videos found matching your search.
+                          </td>
+                        </tr>
+                      )}
+                    </>
                   )}
                 </tbody>
               </table>
@@ -367,10 +407,30 @@ export default function AdminVideosPage() {
                   <input
                     value={form.veedUrl}
                     onChange={(e) => updateField('veedUrl', e.target.value)}
-                    placeholder="https://www.veed.io/embed/..."
+                    placeholder=""
                     className={`w-full px-4 py-3 bg-background-50 border rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400 transition-colors ${errors.veedUrl ? 'border-red-300 bg-red-50/30' : 'border-background-200'}`}
                   />
                   {errors.veedUrl && <p className="text-xs text-red-500 mt-1.5">{errors.veedUrl}</p>}
+                </div>
+
+                {/* ------ OR ------ Divider */}
+                <div className="relative flex items-center justify-center my-2">
+                  <div className="border-t border-background-200 w-full"></div>
+                  <span className="bg-background-50 px-3 text-xs font-semibold text-foreground-400 uppercase tracking-wider absolute">
+                    OR
+                  </span>
+                </div>
+
+                {/* Vimeo Video ID */}
+                <div>
+                  <label className="block text-sm font-medium text-foreground-700 mb-2">Vimeo Video ID</label>
+                  <input
+                    value={form.vimeoId || ''}
+                    onChange={(e) => updateField('vimeoId', e.target.value)}
+                    placeholder="e.g. 123456789"
+                    className={`w-full px-4 py-3 bg-background-50 border rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400 transition-colors ${errors.vimeoId ? 'border-red-300 bg-red-50/30' : 'border-background-200'}`}
+                  />
+                  {errors.vimeoId && <p className="text-xs text-red-500 mt-1.5">{errors.vimeoId}</p>}
                 </div>
 
                 {/* Designation + Sequence */}
@@ -414,15 +474,15 @@ export default function AdminVideosPage() {
                 {/* Duration + Thumbnail */}
                 <div className="">
                   {/* <div>
-                    <label className="block text-sm font-medium text-foreground-700 mb-2">Duration <span className="text-red-500">*</span></label>
-                    <input
-                      value={form.duration}
-                      onChange={(e) => updateField('duration', e.target.value)}
-                      placeholder="10:30"
-                      className={`w-full px-4 py-3 bg-background-50 border rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400 transition-colors ${errors.duration ? 'border-red-300 bg-red-50/30' : 'border-background-200'}`}
-                    />
-                    {errors.duration && <p className="text-xs text-red-500 mt-1">{errors.duration}</p>}
-                  </div> */}
+              <label className="block text-sm font-medium text-foreground-700 mb-2">Duration <span className="text-red-500">*</span></label>
+              <input
+                value={form.duration}
+                onChange={(e) => updateField('duration', e.target.value)}
+                placeholder="10:30"
+                className={`w-full px-4 py-3 bg-background-50 border rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400 transition-colors ${errors.duration ? 'border-red-300 bg-red-50/30' : 'border-background-200'}`}
+              />
+              {errors.duration && <p className="text-xs text-red-500 mt-1">{errors.duration}</p>}
+            </div> */}
                   <div>
                     <label className="block text-sm font-medium text-foreground-700 mb-2">Thumbnail URL</label>
                     <input
