@@ -143,8 +143,13 @@ export default function LearnPage() {
         }
       });
 
-      const passed = correct === videoQuestions.length;
+      const totalQuestions = videoQuestions.length;
 
+      // 🎯 Calculate score percentage
+      const scorePercentage = (correct / totalQuestions) * 100;
+
+      // 🎯 Marked as passed if score is 60% or higher
+      const passed = scorePercentage >= 60;
       setCorrectCount(correct);
       setQuizPassed(passed);
       setQuizSubmitted(true);
