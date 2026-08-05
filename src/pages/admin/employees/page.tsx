@@ -172,18 +172,25 @@ export default function AdminEmployeesPage() {
     setFormError('');
     setFormSuccess('');
 
-    if (!formName.trim() || !formEmail.trim() || !formDesignation || !formStoreName.trim()) {
-      setFormError('All fields are required, including Store ID and Store Name.');
+    const name = (formName ?? '').trim();
+
+    // Check ONLY mandatory fields (Name and Designation)
+    if (!name || !formDesignation) {
+      setFormError('Please fill in all required fields (Name and Designation).');
       return;
     }
 
+    // Optional: Clean up whitespace for optional fields if provided
+    const email = (formEmail ?? '').trim();
+    const storeName = (formStoreName ?? '').trim();
+
     if (editingId) {
       const res = await api.put(`${API.USER}/${editingId}`, {
-        name: formName.trim(),
-        email: formEmail.trim().toLowerCase(),
+        name,
+        email: email || undefined, // Sends undefined or clean string instead of throwing an error
         designation: formDesignation,
-        store: formStoreName,
-      })
+        store: storeName || undefined,
+      });
       if (res.success) {
         setFormSuccess(res.message || 'Employee updated successfully.');
       } else {
@@ -300,7 +307,7 @@ export default function AdminEmployeesPage() {
                   </div>
                 )}
 
-                {/* <button
+                <button
                   onClick={syncEmployees}
                   disabled={loading}
                   className={`group inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition-all duration-300
@@ -311,13 +318,13 @@ export default function AdminEmployeesPage() {
                 >
                   <i
                     className={`text-base ${loading
-                        ? "ri-loader-4-line animate-spin"
-                        : "ri-refresh-line transition-transform duration-500 group-hover:rotate-180"
+                      ? "ri-loader-4-line animate-spin"
+                      : "ri-refresh-line transition-transform duration-500 group-hover:rotate-180"
                       }`}
                   />
 
                   <span>{loading ? "Syncing..." : "Sync"}</span>
-                </button> */}
+                </button>
 
                 <EmployeeImportModal />
 

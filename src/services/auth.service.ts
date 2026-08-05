@@ -11,11 +11,13 @@ export interface LoginResponse {
 
 export const loginUser = async (
   userName: string,
+  password: string,
   role: string
 ): Promise<LoginResponse> => {
   try {
     const res = await api.post(`${API.AUTH}/login`, {
       userName,
+      password,
       role,
     });
     return res.data;

@@ -4,7 +4,8 @@ import { loginUser } from '@/services/auth.service';
 
 interface AuthContextType {
   user: Employee | null;
-  login: (userName: string, role: string) => Promise<LoginResult>;
+  setUser: React.Dispatch<React.SetStateAction<Employee | null>>;
+  login: (userName: string, password: string, role: string) => Promise<LoginResult>;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -40,7 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(STORAGE_KEY);
   }, []);
 
-  // 🔴 IMPORTANT: Axios Interceptor 401 Unauthorized Event Listener
+  // 🔴 Axios Interceptor 401 Unauthorized Event Listener
   useEffect(() => {
     const handleUnauthorized = () => {
       logout();
@@ -53,9 +54,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [logout]);
 
   const login = useCallback(
-    async (userName: string, role: string): Promise<LoginResult> => {
+    async (userName: string, password: string, role: string): Promise<LoginResult> => {
       try {
-        const { token, user, success, message } = await loginUser(userName, role);
+        const { token, user, success, message } = await loginUser(userName, password, role);
 
         setUser(user);
         localStorage.setItem("token", token);
@@ -73,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, setUser, login, logout, isAuthenticated: !!user }}>
       {children}
     </AuthContext.Provider>
   );

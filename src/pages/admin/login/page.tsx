@@ -4,6 +4,8 @@ import { useAuth } from '@/hooks/useAuth';
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -19,7 +21,8 @@ export default function AdminLoginPage() {
     setError('');
     setLoading(true);
 
-    const res = await login(email.trim(), "Admin");
+    // Pass email, password, and role to the login function
+    const res = await login(email.trim(), password, "Admin");
     if (!res.success) {
       setError(res.message || 'Invalid credentials. Please try again.');
       setLoading(false);
@@ -55,6 +58,7 @@ export default function AdminLoginPage() {
           <h2 className="font-heading text-lg text-foreground-900 mb-5">Administrator Sign In</h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Email Field */}
             <div>
               <label className="block text-sm text-foreground-700 mb-1.5">Email Address or Employee code</label>
               <input
@@ -67,6 +71,29 @@ export default function AdminLoginPage() {
               />
             </div>
 
+            {/* Password Field */}
+            <div>
+              <label className="block text-sm text-foreground-700 mb-1.5">Password</label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  className="w-full px-4 py-3 bg-background-50 border border-background-200 rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400 transition-colors pr-11"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-foreground-400 hover:text-foreground-600 transition-colors cursor-pointer"
+                >
+                  <i className={showPassword ? "ri-eye-off-line text-lg" : "ri-eye-line text-lg"}></i>
+                </button>
+              </div>
+            </div>
+
+            {/* Error Message */}
             {error && (
               <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
                 <i className="ri-error-warning-line text-base"></i>
@@ -74,6 +101,7 @@ export default function AdminLoginPage() {
               </div>
             )}
 
+            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}

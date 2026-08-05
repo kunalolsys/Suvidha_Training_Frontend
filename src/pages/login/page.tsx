@@ -41,7 +41,7 @@ export default function LoginPage() {
     setLoading(true);
 
     // Simulate brief network delay
-    const res = await login(email.trim(), "Employee");
+    const res = await login(email.trim(), "", "Employee");
     if (!res.success) {
       setError(res.message || 'No account found with this email or code. Please check and try again.');
       setLoading(false);

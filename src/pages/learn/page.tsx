@@ -18,75 +18,76 @@ const getInitials = (name?: string) => {
 
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 };
+
 export default function LearnPage() {
   const { videoId } = useParams<{ videoId: string }>();
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(false);
   const [video, setVideo] = useState<any | null>(null);
   const [allVideos, setAllVideos] = useState<any[]>([]);
   const [questions, setQuestions] = useState<any[]>([]);
-  const [progressList, setProgressList] = useState([]);
+  const [progressList, setProgressList] = useState<any[]>([]);
 
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [quizPassed, setQuizPassed] = useState<boolean | null>(null);
   const [correctCount, setCorrectCount] = useState(0);
   const [videoCompleted, setVideoCompleted] = useState(false);
   const modalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const fetchAllVideos = async () => {
     try {
       setLoading(true);
+      const desigId = user?.designation?._id || user?.designation;
       const res = await api.get(`${API.VIDEO}/emp-videos`, {
-        designation: user.designation._id
+        designation: desigId
       });
 
-      setAllVideos(res.data.videos);
+      const videoList = res.data?.videos || res.data?.data?.videos || res.data || [];
+      setAllVideos(Array.isArray(videoList) ? videoList : []);
     } catch (err) {
-      console.error(err);
+      console.error("Error fetching video library:", err);
     } finally {
       setLoading(false);
     }
   };
-  const fetchVideos = async () => {
+
+  const fetchVideo = async () => {
     try {
-      // setLoading(true);
       const res = await api.get(`${API.VIDEO}/${videoId}`);
-      setVideo(res.data.video);
+      setVideo(res.data?.video || res.data?.data || res.data);
     } catch (err) {
-      console.error(err);
-    } finally {
-      // setLoading(false);
+      console.error("Error fetching target video:", err);
     }
   };
+
   const fetchQuestions = async () => {
     try {
-      // setLoading(true);
       const res = await api.get(`${API.QUESTION}/${videoId}`);
-      setQuestions(res.data.questions);
+      const qList = res.data?.questions || res.data?.data || res.data || [];
+      setQuestions(Array.isArray(qList) ? qList : []);
     } catch (err) {
-      console.error(err);
-    } finally {
-      // setLoading(false);
+      console.error("Error fetching questions:", err);
     }
   };
+
   const fetchProgress = async () => {
     try {
-      // setLoading(true);
       const res = await api.get(`${API.PROGRESS}/my-dashboard`);
-
-      setProgressList(res.data);
+      const pList = res.data?.data || res.data || [];
+      setProgressList(Array.isArray(pList) ? pList : []);
     } catch (err) {
-      console.error(err);
-    } finally {
-      // setLoading(false);
+      console.error("Error fetching progress dashboard:", err);
     }
   };
+
   useEffect(() => {
-    fetchVideos();
+    if (!user || !videoId) return;
+
+    fetchVideo();
     fetchAllVideos();
     fetchQuestions();
     fetchProgress();
-
 
     return () => {
       if (modalTimerRef.current) {
@@ -94,82 +95,90 @@ export default function LearnPage() {
       }
     };
   }, [user, videoId]);
+
   const videoQuestions = useMemo(() => {
     return questions
-      .filter((q) => q.video?._id === videoId)
-      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .filter((q) => {
+        const qVideoId = q.video?._id ? q.video._id.toString() : q.video?.toString();
+        return qVideoId === videoId;
+      })
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
       .map((q) => ({
-        id: q._id,
+        id: q._id || q.questionId,
         question: q.question,
 
-        options: q.options.map((opt: any, index: number) => ({
-          id: String.fromCharCode(97 + index), // a,b,c,d,e
-          text: opt.option,
+        options: (q.options || []).map((opt: any, index: number) => ({
+          id: String.fromCharCode(97 + index), // 'a', 'b', 'c', 'd', 'e'
+          text: opt.option || opt.optionText,
         })),
 
         correctOption:
-          q.options.findIndex((o: any) => o.isCorrect) >= 0
+          (q.options || []).findIndex((o: any) => o.isCorrect) >= 0
             ? String.fromCharCode(
-              97 + q.options.findIndex((o: any) => o.isCorrect)
+              97 + (q.options || []).findIndex((o: any) => o.isCorrect)
             )
             : "",
       }));
   }, [questions, videoId]);
 
-  const progress = progressList.find(
-    p => p.video._id === videoId
-  );
+  const progress = progressList.find((p) => {
+    const pVid = p.video?._id ? p.video._id.toString() : p.video?.toString();
+    return pVid === videoId;
+  });
+
   const nextVideo = useMemo(() => {
     if (!video || allVideos.length === 0) return null;
 
     return (
-      allVideos.find(
-        (v: any) =>
-          String(v.designation?._id) === String(video.designation?._id) &&
-          v.sortOrder === video.sortOrder + 1 &&
-          v.isActive
-      ) || null
+      allVideos.find((v: any) => {
+        // Multi-designation array matching support
+        const userDesig = user?.designation?._id?.toString() || user?.designation?.toString();
+        const vDesigs = Array.isArray(v.designation)
+          ? v.designation.map((d: any) => d._id?.toString() || d.toString())
+          : [v.designation?._id?.toString() || v.designation?.toString()];
+
+        const matchesDesignation = vDesigs.includes(userDesig);
+        return matchesDesignation && v.sortOrder === video.sortOrder + 1 && v.isActive !== false;
+      }) || null
     );
-  }, [video, allVideos]);
+  }, [video, allVideos, user]);
+
+  // 🎯 Updated Quiz Submission aligned with Automated Server-side Grading
   const handleQuizSubmit = useCallback(
     async (answers: Record<string, string>) => {
       if (!user || !videoId) return;
 
-      let correct = 0;
-
-      videoQuestions.forEach((q) => {
-        if (answers[q.id] === q.correctOption) {
-          correct++;
-        }
-      });
-
-      const totalQuestions = videoQuestions.length;
-
-      // 🎯 Calculate score percentage
-      const scorePercentage = (correct / totalQuestions) * 100;
-
-      // 🎯 Marked as passed if score is 60% or higher
-      const passed = scorePercentage >= 60;
-      setCorrectCount(correct);
-      setQuizPassed(passed);
-      setQuizSubmitted(true);
+      // Map answers to expected payload: [{ questionId, selectedOption }]
+      const formattedAnswers = Object.entries(answers).map(([qId, selectedLetter]) => ({
+        questionId: qId,
+        selectedOption: ["a", "b", "c", "d", "e"].indexOf(selectedLetter),
+      }));
 
       try {
-        await api.post(`${API.PROGRESS}/submit-quiz`, {
+        const res = await api.post(`${API.PROGRESS}/submit-quiz`, {
           videoId,
-          score: correct,
-          totalQuestions: videoQuestions.length,
-          passed,
-          answers: Object.entries(answers).map(([questionId, selected]) => ({
-            question: questionId,
-            selectedOption: ["a", "b", "c", "d", "e"].indexOf(selected),
-          })),
+          answers: formattedAnswers,
         });
+
+        // Parse automated grading outcome returned by the backend
+        const attemptResult = res.data?.data?.latestAttempt || res.data?.latestAttempt;
+
+        if (attemptResult) {
+          setCorrectCount(attemptResult.correctCount ?? 0);
+          setQuizPassed(attemptResult.passed ?? false);
+        } else {
+          // Fallback if backend wrapper varies
+          setQuizPassed(true);
+        }
+
+        setQuizSubmitted(true);
+        // Refresh local user progress list
+        fetchProgress();
       } catch (err) {
-        console.error(err);
+        console.error("Failed to submit quiz attempt:", err);
       }
     },
-    [user, videoId, videoQuestions]
+    [user, videoId]
   );
 
   const handleRetry = useCallback(() => {
@@ -274,14 +283,8 @@ export default function LearnPage() {
 
       <main className="max-w-6xl mx-auto px-4 md:px-6 py-8">
         <div className="mb-6">
-          {/* <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary-100 text-primary-700 text-xs font-medium mb-3">
-            {video.designation ? video.designation.name : ""}
-          </span> */}
           <h1 className="font-heading text-2xl md:text-3xl text-foreground-900 mb-2">{video.title}</h1>
           <div className="flex items-center gap-4 text-sm text-foreground-500">
-            {/* <span className="flex items-center gap-1">
-              <i className="ri-time-line"></i> {video.duration}
-            </span> */}
             {progress && progress.attempts > 0 && (
               <span className="flex items-center gap-1">
                 <i className="ri-refresh-line"></i> Quiz attempt {progress.attempts + 1}
@@ -293,7 +296,6 @@ export default function LearnPage() {
         <VideoPlayer
           videoUrl={video.veedUrl}
           vimeoId={video.vimeoId}
-          // videoUrl={"https://veed.io/view/3cb0a71c-f9e1-466b-a9da-3a796615585a"}
           title={video.title}
           completed={videoCompleted}
           onComplete={async () => {
@@ -305,7 +307,7 @@ export default function LearnPage() {
                 status: "unlocked",
               });
             } catch (err) {
-              console.error(err);
+              console.error("Failed to unlock video status:", err);
             }
           }}
         />
@@ -356,7 +358,7 @@ export default function LearnPage() {
           correctCount={correctCount}
           totalCount={videoQuestions.length}
           hasNextVideo={!!nextVideo}
-          nextVideoId={nextVideo?.id}
+          nextVideoId={nextVideo?._id || nextVideo?.id}
           onRetry={handleRetry}
           onGoToDashboard={handleGoToDashboard}
         />

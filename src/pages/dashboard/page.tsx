@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '@/api/api';
 import { API } from '@/api/endpoints';
 import noThumbnail from '@/assets/noThumbnail.png';
+import TrainingHistoryView from '../progress/TrainingHistoryView';
 
 const getInitials = (name?: string) => {
   if (!name) return "";
@@ -16,6 +17,7 @@ const getInitials = (name?: string) => {
 
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 };
+
 function getStatusIcon(status: any) {
   switch (status) {
     case 'completed':
@@ -53,65 +55,81 @@ function getStatusBadge(status: any) {
 }
 
 function formatDate(dateStr: string): string {
+  if (!dateStr) return "-";
   const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "-";
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 export default function DashboardPage() {
   const { user, logout, isAuthenticated } = useAuth();
-  const [loading, setLoading] = useState(false)
-  const [videos, setVideos] = useState([]);
-  const [progress, setProgress] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [videos, setVideos] = useState<any[]>([]);
+  const [progress, setProgress] = useState<any[]>([]);
   const navigate = useNavigate();
-  const [showHistory, setShowHistory] = useState(false);
-  const modalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const fetchProgress = async () => {
     try {
       const res = await api.get(`${API.PROGRESS}/my-dashboard`);
-      setProgress(res.data);
+      const progressData = res.data?.data || res.data || [];
+      setProgress(Array.isArray(progressData) ? progressData : []);
     } catch (err) {
-      console.log(err);
+      console.error("Error fetching progress:", err);
     }
   };
+
   const fetchVideos = async () => {
     try {
       setLoading(true);
       const res = await api.get(`${API.VIDEO}/emp-videos`, {
-        designation: user.designation._id
+        designation: user?.designation?._id
       });
-
-      setVideos(res.data.videos);
+      const videoList = res.data?.videos || res.data?.data?.videos || res.data || [];
+      setVideos(Array.isArray(videoList) ? videoList : []);
     } catch (err) {
-      console.error(err);
+      console.error("Error fetching videos:", err);
     } finally {
       setLoading(false);
     }
   };
+
   useEffect(() => {
     if (!user) return;
-
     fetchVideos();
     fetchProgress();
   }, [user]);
+
   const designationVideos = videos ?? [];
   const videoProgressMap = new Map();
 
+  // Create a set of valid video IDs that currently exist in designationVideos
+  const existingVideoIds = new Set(
+    designationVideos.map((v: any) => v._id?.toString()).filter(Boolean)
+  );
+
+  // Map progress only for existing active videos
   progress.forEach((p: any) => {
-    videoProgressMap.set(p.video._id, p);
+    const vId = p.video?._id ? p.video._id.toString() : p.video?.toString();
+    if (vId && existingVideoIds.has(vId)) {
+      videoProgressMap.set(vId, p);
+    }
   });
-  const completedCount = progress.filter(
-    (p: any) => p.status === "completed"
-  ).length;
+
+  // Calculate total and completed counts using ONLY existing videos
   const totalCount = designationVideos.length;
+
+  const completedCount = designationVideos.filter((v: any) => {
+    const vId = v._id?.toString();
+    const prog = videoProgressMap.get(vId);
+    return prog?.status === "completed";
+  }).length;
+
   const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
   if (!isAuthenticated || !user) {
     return <Navigate to="/" replace />;
   }
 
-  // Redirect admin users to admin dashboard
-  if (user.role === 'Admin') {
-    return <Navigate to="/admin/dashboard" replace />;
-  }
   return (
     <div className="min-h-screen bg-background-50">
       {/* Top Navigation */}
@@ -133,8 +151,8 @@ export default function DashboardPage() {
                 <p className="text-sm font-medium text-foreground-900">{user.name}</p>
                 <p className="text-xs text-foreground-500">{user.designation?.name || ""}</p>
               </div>
-              <div className="w-9 h-9 rounded-full bg-primary-100 flex items-center justify-center">
-                <span className="text-sm font-semibold text-primary-700"> {user.avatar ? (
+              <div className="w-9 h-9 rounded-full bg-primary-100 flex items-center justify-center overflow-hidden">
+                {user.avatar ? (
                   <img
                     src={user.avatar}
                     alt={user.name}
@@ -144,7 +162,7 @@ export default function DashboardPage() {
                   <span className="text-sm font-semibold text-primary-700">
                     {getInitials(user.name)}
                   </span>
-                )}</span>
+                )}
               </div>
             </div>
             <button
@@ -162,10 +180,10 @@ export default function DashboardPage() {
         {/* Welcome + Progress */}
         <div className="mb-10">
           <h1 className="font-heading text-2xl md:text-3xl text-foreground-900 mb-2">
-            Welcome back, {user.name.split(' ')[0]}
+            Welcome back, {user.name?.split(' ')[0]}
           </h1>
           <p className="text-foreground-600 text-sm">
-            {user.designation.name} Training Program &middot; {completedCount} of {totalCount} videos completed
+            {user.designation?.name} Training Program &middot; {completedCount} of {totalCount} videos completed
           </p>
 
           {/* Progress Bar */}
@@ -220,108 +238,109 @@ export default function DashboardPage() {
         {/* Video List */}
         <div>
           <h2 className="font-heading text-xl text-foreground-900 mb-5">
-            {user.designation.name} Training Videos
+            {user.designation?.name} Training Videos
           </h2>
 
           <div className="space-y-3">
-            {designationVideos.map((video: any, idx) => {
-              // 1. Get progress for the current video
-              const prog = videoProgressMap.get(video._id?.toString());
+            {Array.isArray(designationVideos) && designationVideos.length > 0 && (
+              designationVideos.map((video: any, idx) => {
+                if (!video) return null;
 
-              // 2. Get progress for the PREVIOUS video (if this isn't the first one)
-              const prevVideo = idx > 0 ? designationVideos[idx - 1] : null;
-              const prevProg = prevVideo ? videoProgressMap.get(prevVideo._id?.toString()) : null;
+                const videoIdStr = video._id?.toString() ?? "";
+                const prog = videoProgressMap?.get(videoIdStr);
 
-              let status = "locked";
+                const prevVideo = idx > 0 ? designationVideos[idx - 1] : null;
+                const prevVideoIdStr = prevVideo?._id?.toString() ?? "";
+                const prevProg = prevVideoIdStr ? videoProgressMap?.get(prevVideoIdStr) : null;
 
-              if (prog) {
-                status = prog.status; // 'completed' or 'unlocked' from database
-              } else if (idx === 0) {
-                // First video is always unlocked if no progress document exists yet
-                status = "unlocked";
-              } else if (prevProg && prevProg.status === "completed") {
-                // Sequential Unlock: Unlock this video ONLY if the previous one is fully completed
-                status = "unlocked";
-              }
+                let status = "locked";
 
-              // Check if it's already completed to prevent retaking the quiz
-              const isAlreadyCompleted = status === 'completed';
+                if (prog?.status) {
+                  status = prog.status;
+                } else if (idx === 0) {
+                  status = "unlocked";
+                } else if (prevProg?.status === "completed") {
+                  status = "unlocked";
+                }
 
-              return (
-                <div
-                  key={video._id}
-                  className={`bg-background-50 border rounded-xl p-4 md:p-5 flex items-center gap-4 transition-all ${status === 'locked' || isAlreadyCompleted
-                    ? 'border-background-200 opacity-70 cursor-not-allowed'
-                    : 'border-background-200 hover:border-primary-300 cursor-pointer'
-                    }`}
-                  onClick={() => {
-                    // Guard clause: Only navigate if unlocked AND not already completed
-                    if (status === 'unlocked' && !isAlreadyCompleted) {
-                      navigate(`/learn/${video._id}`);
-                    }
-                  }}
-                >
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${status === 'completed'
-                    ? 'bg-accent-100'
-                    : status === 'unlocked'
-                      ? 'bg-primary-100'
-                      : 'bg-background-200'
-                    }`}>
-                    <span className={`text-sm font-semibold ${status === 'completed'
-                      ? 'text-accent-700'
+                const isAlreadyCompleted = status === 'completed';
+
+                return (
+                  <div
+                    key={video._id || idx}
+                    className={`bg-background-50 border rounded-xl p-4 md:p-5 flex items-center gap-4 transition-all ${status === 'locked' || isAlreadyCompleted
+                      ? 'border-background-200 opacity-70 cursor-not-allowed'
+                      : 'border-background-200 hover:border-primary-300 cursor-pointer'
+                      }`}
+                    onClick={() => {
+                      if (status === 'unlocked' && !isAlreadyCompleted && video._id) {
+                        navigate(`/learn/${video._id}`);
+                      }
+                    }}
+                  >
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${status === 'completed'
+                      ? 'bg-accent-100'
                       : status === 'unlocked'
-                        ? 'text-primary-700'
-                        : 'text-foreground-400'
+                        ? 'bg-primary-100'
+                        : 'bg-background-200'
                       }`}>
-                      {idx + 1}
-                    </span>
-                  </div>
-
-                  <div className="w-28 h-16 md:w-36 md:h-20 rounded-lg overflow-hidden flex-shrink-0 bg-background-200">
-                    <img
-                      src={video.thumbnail || noThumbnail}
-                      alt={video.title}
-                      className="w-full h-full object-cover object-top"
-                      loading="lazy"
-                    />
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-medium text-foreground-900 text-sm md:text-base truncate">
-                        {video.title}
-                      </h3>
-                      <div className="flex-shrink-0">{getStatusBadge(status)}</div>
+                      <span className={`text-sm font-semibold ${status === 'completed'
+                        ? 'text-accent-700'
+                        : status === 'unlocked'
+                          ? 'text-primary-700'
+                          : 'text-foreground-400'
+                        }`}>
+                        {idx + 1}
+                      </span>
                     </div>
-                    <div className="flex items-center gap-3 mt-1.5 text-xs text-foreground-500">
-                      {/* <span className="flex items-center gap-1">
-                        <i className="ri-time-line"></i> {video.duration}
-                      </span> */}
-                      {prog && prog.attempts > 0 && (
-                        <span className="flex items-center gap-1">
-                          <i className="ri-refresh-line"></i> {prog.attempts} attempt{prog.attempts > 1 ? 's' : ''}
-                        </span>
-                      )}
-                      {isAlreadyCompleted && (
-                        <span className="text-accent-600 font-medium bg-accent-50/50 px-1.5 py-0.5 rounded">
-                          Quiz Locked (Passed)
-                        </span>
+
+                    <div className="w-28 h-16 md:w-36 md:h-20 rounded-lg overflow-hidden flex-shrink-0 bg-background-200">
+                      <img
+                        src={video.thumbnail || noThumbnail}
+                        alt={video.title || "Video thumbnail"}
+                        className="w-full h-full object-cover object-top"
+                        loading="lazy"
+                        onError={(e) => {
+                          e.currentTarget.src = noThumbnail;
+                          e.currentTarget.onerror = null;
+                        }}
+                      />
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="font-medium text-foreground-900 text-sm md:text-base truncate">
+                          {video.title || "Untitled Video"}
+                        </h3>
+                        <div className="flex-shrink-0">{getStatusBadge(status)}</div>
+                      </div>
+                      <div className="flex items-center gap-3 mt-1.5 text-xs text-foreground-500">
+                        {prog && Number(prog.attempts) > 0 && (
+                          <span className="flex items-center gap-1">
+                            <i className="ri-refresh-line"></i> {prog.attempts} attempt{prog.attempts > 1 ? 's' : ''}
+                          </span>
+                        )}
+                        {isAlreadyCompleted && (
+                          <span className="text-accent-600 font-medium bg-accent-50/50 px-1.5 py-0.5 rounded">
+                            Quiz Locked (Passed)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex-shrink-0 ml-2">
+                      {isAlreadyCompleted ? (
+                        <i className="ri-checkbox-circle-fill text-accent-500 text-xl" title="Completed - Quiz Locked"></i>
+                      ) : (
+                        getStatusIcon(status)
                       )}
                     </div>
                   </div>
-
-                  <div className="flex-shrink-0 ml-2">
-                    {/* Custom lock icon display if completed */}
-                    {isAlreadyCompleted ? (
-                      <i className="ri-checkbox-circle-fill text-accent-500 text-xl" title="Completed - Quiz Locked"></i>
-                    ) : (
-                      getStatusIcon(status)
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
+
           {loading ? (
             <div className="text-center py-16 bg-background-50 border border-background-200 rounded-2xl">
               <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-background-100 flex items-center justify-center">
@@ -344,8 +363,9 @@ export default function DashboardPage() {
             </div>
           ) : null}
         </div>
+
         {/* Training History */}
-        <div className="mt-12">
+        {/* <div className="mt-12">
           <button
             onClick={() => setShowHistory(!showHistory)}
             className="flex items-center gap-2 mb-5 text-sm font-medium text-foreground-700 hover:text-foreground-900 transition-colors cursor-pointer whitespace-nowrap"
@@ -358,7 +378,7 @@ export default function DashboardPage() {
             <span className="font-heading text-lg">Training History</span>
             <span className="text-xs text-foreground-500 font-normal">
               ({progress.reduce(
-                (acc: number, p: any) => acc + p.history.length,
+                (acc: number, p: any) => acc + (p.history?.length || 0),
                 0
               )} total attempts)
             </span>
@@ -366,12 +386,15 @@ export default function DashboardPage() {
 
           {showHistory && (
             <div className="space-y-4">
-              {designationVideos.map((video) => {
-                const prog = videoProgressMap.get(video._id);
-                if (!prog || prog.history.length === 0) return null;
+              {progress.map((prog: any) => {
+                if (!prog || !prog.history || prog.history.length === 0) return null;
+
+                // Fallback title support for deleted/modified video documents
+                const title = prog.videoSnapshot?.title || prog.video?.title || "Completed Module";
+                const videoIdKey = prog.video?._id || prog._id;
 
                 return (
-                  <div key={video._id} className="bg-background-50 border border-background-200 rounded-xl overflow-hidden">
+                  <div key={videoIdKey} className="bg-background-50 border border-background-200 rounded-xl overflow-hidden">
                     <div className="px-5 py-3 bg-background-100 border-b border-background-200 flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${prog.status === 'completed'
@@ -382,18 +405,18 @@ export default function DashboardPage() {
                           }`}>
                           {prog.status === 'completed' ? 'Passed' : 'In Progress'}
                         </span>
-                        <h3 className="text-sm font-medium text-foreground-900 truncate">{video.title}</h3>
+                        <h3 className="text-sm font-medium text-foreground-900 truncate">{title}</h3>
                       </div>
                       <span className="text-xs text-foreground-500">{prog.history.length} attempt{prog.history.length > 1 ? 's' : ''}</span>
                     </div>
+
                     <div className="divide-y divide-background-100">
                       {prog.history.map((attempt: any, index: number) => (
-                        <div key={index + 1} className="px-5 py-3 flex items-center justify-between">
+                        <div key={attempt._id || index} className="px-5 py-3 flex items-center justify-between">
                           <div className="flex items-center gap-4">
                             <span className="text-xs text-foreground-500 w-20">Attempt #{index + 1}</span>
-                            <span className={`text-sm font-semibold ${attempt.passed ? 'text-accent-600' : 'text-red-500'
-                              }`}>
-                              {attempt.score}/{attempt.totalQuestions}
+                            <span className={`text-sm font-semibold ${attempt.passed ? 'text-accent-600' : 'text-red-500'}`}>
+                              {attempt.score}%
                             </span>
                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${attempt.passed
                               ? 'bg-accent-50 text-accent-700'
@@ -411,7 +434,7 @@ export default function DashboardPage() {
               })}
 
               {progress.reduce(
-                (acc: number, p: any) => acc + p.history.length,
+                (acc: number, p: any) => acc + (p.history?.length || 0),
                 0
               ) === 0 && (
                   <div className="text-center py-10 bg-background-50 border border-dashed border-background-300 rounded-xl">
@@ -424,6 +447,9 @@ export default function DashboardPage() {
                 )}
             </div>
           )}
+        </div> */}
+        <div className="mt-12">
+          <TrainingHistoryView progressList={progress} activeVideoIds={existingVideoIds} />
         </div>
       </main>
     </div>
