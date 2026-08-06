@@ -449,7 +449,11 @@ export default function DashboardPage() {
           )}
         </div> */}
         <div className="mt-12">
-          <TrainingHistoryView progressList={progress} activeVideoIds={existingVideoIds} />
+          <TrainingHistoryView
+            progressList={progress}
+            activeVideoIds={existingVideoIds}
+            currentUserDesignationId={user?.designation?._id?.toString()}
+          />
         </div>
       </main>
     </div>

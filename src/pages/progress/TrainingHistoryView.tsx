@@ -15,7 +15,7 @@ interface QuestionSnapshot {
 
 interface Attempt {
     _id?: string;
-    score: number; // e.g. 80 for 80%
+    score: number;
     totalQuestions: number;
     passed: boolean;
     attemptedAt: string;
@@ -27,24 +27,32 @@ interface ProgressRecord {
     status: "locked" | "unlocked" | "completed";
     attempts: number;
     completedAt?: string;
+    designation?: string | { _id: string; name?: string };
     videoSnapshot?: {
         title: string;
         sortOrder: number;
         duration: string;
+        designationName?: string;
     };
     video?: {
         _id: string;
         title: string;
+        designation?: string | { _id: string; name?: string };
     };
     history: Attempt[];
 }
+
 interface Props {
     progressList: ProgressRecord[];
-    activeVideoIds?: Set<string>; // <-- Added prop
+    activeVideoIds?: Set<string>;
+    currentUserDesignationId?: string;
 }
 
-export default function TrainingHistoryView({ progressList, activeVideoIds }: Props) {
-    // Currently selected attempt for deep-dive snapshot view
+export default function TrainingHistoryView({
+    progressList = [],
+    activeVideoIds,
+    currentUserDesignationId,
+}: Props) {
     const [selectedAttempt, setSelectedAttempt] = useState<{
         videoTitle: string;
         attemptNumber: number;
@@ -64,8 +72,8 @@ export default function TrainingHistoryView({ progressList, activeVideoIds }: Pr
         });
     };
 
-    const activeProgressRecords = progressList.filter(
-        (p) => p.history && p.history.length > 0
+    const activeProgressRecords = (progressList || []).filter(
+        (p) => p && p.history && p.history.length > 0
     );
 
     return (
@@ -97,13 +105,45 @@ export default function TrainingHistoryView({ progressList, activeVideoIds }: Pr
             ) : (
                 <div className="space-y-4">
                     {activeProgressRecords.map((prog) => {
-                        // Freeze title fallback: prefers videoSnapshot title over dynamic video title
                         const title =
                             prog.videoSnapshot?.title ||
                             prog.video?.title ||
                             "Training Module";
-                        const videoId = prog.video?._id ? prog.video._id.toString() : prog.video?.toString();
-                        const isDeleted = activeVideoIds && videoId ? !activeVideoIds.has(videoId) : (!prog.video && !prog.videoSnapshot);
+
+                        const videoId = prog.video?._id
+                            ? prog.video._id.toString()
+                            : prog.video?.toString();
+
+                        // Check if the video is currently assigned to the user's active video list
+                        const isVideoActiveInCurrentList = Boolean(
+                            activeVideoIds && videoId && activeVideoIds.has(videoId)
+                        );
+
+                        // Clean extraction of Designation IDs
+                        const progDesigId =
+                            typeof prog.designation === "object"
+                                ? prog.designation?._id?.toString()
+                                : prog.designation?.toString();
+
+                        const videoDesigId =
+                            typeof prog.video?.designation === "object"
+                                ? prog.video?.designation?._id?.toString()
+                                : prog.video?.designation?.toString();
+
+                        const recordDesigId = progDesigId || videoDesigId;
+                        const currentDesigId = currentUserDesignationId?.toString();
+
+                        // 1. Is Designation Different?
+                        // True if recorded designation ID exists and does NOT match current designation ID
+                        const isDifferentDesignation = Boolean(
+                            recordDesigId && currentDesigId && recordDesigId !== currentDesigId
+                        );
+
+                        // 2. Is Video Deleted under Same Designation?
+                        // True ONLY IF designation is the same (not different) AND the video is missing from active list
+                        const isDeletedUnderSameDesignation =
+                            !isDifferentDesignation && !isVideoActiveInCurrentList;
+
                         return (
                             <div
                                 key={prog._id}
@@ -111,25 +151,39 @@ export default function TrainingHistoryView({ progressList, activeVideoIds }: Pr
                             >
                                 {/* Module Header */}
                                 <div className="px-5 py-3.5 bg-background-100/70 border-b border-background-200 flex flex-wrap items-center justify-between gap-3">
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2 flex-wrap">
                                         <span
                                             className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${prog.status === "completed"
-                                                ? "bg-accent-100 text-accent-700 border border-accent-200"
-                                                : "bg-primary-100 text-primary-700 border border-primary-200"
+                                                    ? "bg-accent-100 text-accent-700 border border-accent-200"
+                                                    : "bg-primary-100 text-primary-700 border border-primary-200"
                                                 }`}
                                         >
                                             {prog.status === "completed" ? "Completed" : "In Progress"}
                                         </span>
+
                                         <h3 className="font-heading font-semibold text-foreground-900 text-sm md:text-base">
                                             {title}
                                         </h3>
+
+                                        {/* CASE 1: Previous/Different Designation Badge */}
+                                        {isDifferentDesignation && (
+                                            <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                                                <i className="ri-history-line text-xs"></i>
+                                                {prog.videoSnapshot?.designationName
+                                                    ? `Prev. Designation (${prog.videoSnapshot.designationName})`
+                                                    : "Previous Designation"}
+                                            </span>
+                                        )}
+
+                                        {/* CASE 2: Same Designation + Video Deleted Badge */}
+                                        {isDeletedUnderSameDesignation && (
+                                            <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200">
+                                                <i className="ri-delete-bin-line text-xs"></i>
+                                                Deleted by Admin
+                                            </span>
+                                        )}
                                     </div>
-                                    {isDeleted && (
-                                        <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200">
-                                            <i className="ri-delete-bin-line text-xs"></i>
-                                            Deleted by Admin
-                                        </span>
-                                    )}
+
                                     <div className="flex items-center gap-4 text-xs text-foreground-500">
                                         {prog.completedAt && (
                                             <span>
@@ -137,14 +191,14 @@ export default function TrainingHistoryView({ progressList, activeVideoIds }: Pr
                                             </span>
                                         )}
                                         <span>
-                                            {prog.history.length} Attempt{prog.history.length > 1 ? "s" : ""}
+                                            {prog.history?.length || 0} Attempt{(prog.history?.length || 0) > 1 ? "s" : ""}
                                         </span>
                                     </div>
                                 </div>
 
                                 {/* Attempts Table */}
                                 <div className="divide-y divide-background-100">
-                                    {prog.history.map((attempt, idx) => (
+                                    {prog.history?.map((attempt, idx) => (
                                         <div
                                             key={attempt._id || idx}
                                             className="px-5 py-3.5 flex flex-wrap items-center justify-between gap-4 hover:bg-background-100/40 transition-colors"
@@ -162,8 +216,8 @@ export default function TrainingHistoryView({ progressList, activeVideoIds }: Pr
                                                     </span>
                                                     <span
                                                         className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${attempt.passed
-                                                            ? "bg-accent-50 text-accent-700 border border-accent-200"
-                                                            : "bg-rose-50 text-rose-700 border border-rose-200"
+                                                                ? "bg-accent-50 text-accent-700 border border-accent-200"
+                                                                : "bg-rose-50 text-rose-700 border border-rose-200"
                                                             }`}
                                                     >
                                                         {attempt.passed ? "Passed" : "Failed"}
@@ -176,7 +230,6 @@ export default function TrainingHistoryView({ progressList, activeVideoIds }: Pr
                                                     {formatDate(attempt.attemptedAt)}
                                                 </span>
 
-                                                {/* View Question Audit Snapshot Button */}
                                                 {attempt.snapshot && attempt.snapshot.length > 0 && (
                                                     <button
                                                         onClick={() =>
@@ -202,11 +255,10 @@ export default function TrainingHistoryView({ progressList, activeVideoIds }: Pr
                 </div>
             )}
 
-            {/* Snapshot Audit Detail Modal */}
+            {/* Audit Detail Modal */}
             {selectedAttempt && (
                 <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
                     <div className="bg-background-50 border border-background-200 rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-xl overflow-hidden">
-                        {/* Modal Header */}
                         <div className="px-6 py-4 border-b border-background-200 flex items-center justify-between bg-background-100/50">
                             <div>
                                 <h3 className="font-heading font-bold text-foreground-900 text-base">
@@ -225,22 +277,20 @@ export default function TrainingHistoryView({ progressList, activeVideoIds }: Pr
                             </button>
                         </div>
 
-                        {/* Modal Score Overview */}
                         <div className="px-6 py-3 bg-background-100/30 border-b border-background-200 flex items-center justify-between text-xs">
                             <span className="text-foreground-600">
                                 Score: <strong className="text-foreground-900">{selectedAttempt.attempt.score}%</strong>
                             </span>
                             <span
                                 className={`font-semibold px-2.5 py-0.5 rounded-full ${selectedAttempt.attempt.passed
-                                    ? "bg-accent-100 text-accent-700"
-                                    : "bg-rose-100 text-rose-700"
+                                        ? "bg-accent-100 text-accent-700"
+                                        : "bg-rose-100 text-rose-700"
                                     }`}
                             >
                                 {selectedAttempt.attempt.passed ? "PASSED" : "FAILED"}
                             </span>
                         </div>
 
-                        {/* Questions Snapshot Body */}
                         <div className="p-6 overflow-y-auto space-y-5 flex-1">
                             {selectedAttempt.attempt.snapshot?.map((q, qIdx) => (
                                 <div
@@ -252,18 +302,15 @@ export default function TrainingHistoryView({ progressList, activeVideoIds }: Pr
                                             <span className="font-bold mr-1">{qIdx + 1}.</span> {q.questionText}
                                         </p>
                                         <span
-                                            className={`shrink-0 text-xs font-semibold px-2 py-0.5 rounded ${q.isCorrect
-                                                ? "bg-accent-100 text-accent-700"
-                                                : "bg-rose-100 text-rose-700"
+                                            className={`shrink-0 text-xs font-semibold px-2 py-0.5 rounded ${q.isCorrect ? "bg-accent-100 text-accent-700" : "bg-rose-100 text-rose-700"
                                                 }`}
                                         >
                                             {q.isCorrect ? "Correct" : "Incorrect"}
                                         </span>
                                     </div>
 
-                                    {/* Options List */}
                                     <div className="space-y-1.5 pt-1">
-                                        {q.options.map((opt, oIdx) => {
+                                        {q.options?.map((opt, oIdx) => {
                                             const isSelected = Number(q.selectedOptionIndex) === oIdx;
                                             const isCorrect = opt.isCorrect;
 
@@ -299,7 +346,6 @@ export default function TrainingHistoryView({ progressList, activeVideoIds }: Pr
                             ))}
                         </div>
 
-                        {/* Modal Footer */}
                         <div className="px-6 py-3 border-t border-background-200 bg-background-100/50 flex justify-end">
                             <button
                                 onClick={() => setSelectedAttempt(null)}
