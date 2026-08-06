@@ -88,7 +88,7 @@ export default function TrainingHistoryView({
                     </p>
                 </div>
                 <div className="px-3 py-1 bg-primary-50 text-primary-700 border border-primary-200 rounded-full text-xs font-semibold">
-                    {activeProgressRecords.length} Modules Attempted
+                    {activeProgressRecords.length} Videos Attempted
                 </div>
             </div>
 

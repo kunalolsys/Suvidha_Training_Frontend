@@ -348,7 +348,7 @@ export default function DashboardPage() {
               </div>
               <p className="text-foreground-600 font-medium">Loading training videos...</p>
               <p className="text-sm text-foreground-500 mt-1">
-                Please wait while we fetch your assigned modules.
+                Please wait while we fetch your assigned videos.
               </p>
             </div>
           ) : !Array.isArray(designationVideos) || designationVideos.length === 0 ? (
