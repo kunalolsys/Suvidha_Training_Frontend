@@ -284,11 +284,11 @@ export default function AdminQuestionsPage() {
   };
   return (
     <div className="min-h-screen bg-background-50 flex">
-      <AdminSidebar />
+      {/* <AdminSidebar /> */}
 
       <main className="flex-1 min-w-0">
         {/* Mobile Header */}
-        <header className="lg:hidden bg-background-50 border-b border-background-200 sticky top-0 z-30">
+        {/* <header className="lg:hidden bg-background-50 border-b border-background-200 sticky top-0 z-30">
           <div className="px-4 h-14 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-primary-500 flex items-center justify-center">
@@ -297,10 +297,10 @@ export default function AdminQuestionsPage() {
               <span className="font-heading text-base text-foreground-900">STU Admin</span>
             </div>
           </div>
-        </header>
+        </header> */}
 
         <div className=" mx-auto px-4 md:px-6 py-6 lg:py-8">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          {/* <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
               <h1 className="font-heading text-2xl text-foreground-900 mb-1">Question Management</h1>
               <p className="text-sm text-foreground-500">Create and manage MCQ questions linked to videos</p>
@@ -309,7 +309,7 @@ export default function AdminQuestionsPage() {
               <i className="ri-add-line text-lg"></i>
               Add Question
             </button>
-          </div>
+          </div> */}
 
           {/* Filters */}
           <div className="flex flex-col sm:flex-row gap-3 mb-6">
@@ -342,7 +342,10 @@ export default function AdminQuestionsPage() {
                 })),
               ]}
             />
-
+            <button onClick={openAdd} className="px-5 py-2.5 bg-primary-500 hover:bg-primary-600 text-background-50 font-medium rounded-xl text-sm transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer">
+              <i className="ri-add-line text-lg"></i>
+              Add Question
+            </button>
           </div>
 
           {/* Table */}

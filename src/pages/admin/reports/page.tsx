@@ -274,11 +274,11 @@ export default function AdminReportsPage() {
 
   return (
     <div className="min-h-screen bg-background-50 flex">
-      <AdminSidebar />
+      {/* <AdminSidebar /> */}
 
       <main className="flex-1 min-w-0">
         {/* Mobile Header */}
-        <header className="lg:hidden bg-background-50 border-b border-background-200 sticky top-0 z-30">
+        {/* <header className="lg:hidden bg-background-50 border-b border-background-200 sticky top-0 z-30">
           <div className="px-4 h-14 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-primary-500 flex items-center justify-center">
@@ -287,14 +287,14 @@ export default function AdminReportsPage() {
               <span className="font-heading text-base text-foreground-900">STU Admin</span>
             </div>
           </div>
-        </header>
+        </header> */}
 
         <div className=" mx-auto px-4 md:px-6 py-6 lg:py-8">
           {/* Page Header + Period Filter */}
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between mb-8 gap-4">
             <div>
-              <h1 className="font-heading text-2xl md:text-3xl text-foreground-900 mb-1">Reports</h1>
-              <p className="text-sm text-foreground-500">Training analytics across all stores and employees</p>
+              {/* <h1 className="font-heading text-2xl md:text-3xl text-foreground-900 mb-1">Reports</h1>
+              <p className="text-sm text-foreground-500">Training analytics across all stores and employees</p> */}
             </div>
             <div className="flex items-center gap-1 bg-background-100 rounded-full p-1 w-fit">
               {periods.map((p) => (

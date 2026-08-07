@@ -77,7 +77,7 @@ export default function TrainingHistoryView({
     );
 
     return (
-        <div className="space-y-6">
+        <div className="">
             <div className="flex items-center justify-between pb-4 border-b border-background-200">
                 <div>
                     <h2 className="font-heading text-xl font-bold text-foreground-900">
@@ -257,7 +257,7 @@ export default function TrainingHistoryView({
 
             {/* Audit Detail Modal */}
             {selectedAttempt && (
-                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs h-100 flex items-center justify-center p-4">
                     <div className="bg-background-50 border border-background-200 rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-xl overflow-hidden">
                         <div className="px-6 py-4 border-b border-background-200 flex items-center justify-between bg-background-100/50">
                             <div>

@@ -88,6 +88,7 @@ export default function AdminEmployeesPage() {
   const [formSuccess, setFormSuccess] = useState('');
   const modalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadEmp, setLoadEmp] = useState(false);
   const debouncedSearch = useDebounce(search);
   const [syncResult, setSyncResult] = useState<any>(null);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
@@ -122,7 +123,7 @@ export default function AdminEmployeesPage() {
 
   const fetchEmployees = async () => {
     try {
-      setLoading(true);
+      setLoadEmp(true);
       const res = await api.get(`${API.USER}`, {
         page,
         limit: pagination.limit,
@@ -136,7 +137,7 @@ export default function AdminEmployeesPage() {
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      setLoadEmp(false);
     }
   };
 
@@ -322,11 +323,11 @@ export default function AdminEmployeesPage() {
 
   return (
     <div className="min-h-screen bg-background-50 flex">
-      <AdminSidebar />
+      {/* <AdminSidebar /> */}
 
       <main className="flex-1 min-w-0">
         {/* Mobile Header */}
-        <header className="lg:hidden bg-background-50 border-b border-background-200 sticky top-0 z-20">
+        {/* <header className="lg:hidden bg-background-50 border-b border-background-200 sticky top-0 z-20">
           <div className="px-4 h-14 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-primary-500 flex items-center justify-center">
@@ -335,14 +336,14 @@ export default function AdminEmployeesPage() {
               <span className="font-heading text-base text-foreground-900">STU Admin</span>
             </div>
           </div>
-        </header>
+        </header> */}
 
         <div className="mx-auto px-4 md:px-6 py-6 lg:py-8">
           {/* Page Title */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <div>
-              <h1 className="font-heading text-xl md:text-2xl text-foreground-900">Employees</h1>
-              <p className="text-sm text-foreground-500 mt-0.5">Manage your workforce and training assignments</p>
+              {/* <h1 className="font-heading text-xl md:text-2xl text-foreground-900">Employees</h1>
+              <p className="text-sm text-foreground-500 mt-0.5">Manage your workforce and training assignments</p> */}
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-background-200 bg-background-50 p-4">
@@ -530,7 +531,7 @@ export default function AdminEmployeesPage() {
                 </thead>
 
                 <tbody className="divide-y divide-background-100">
-                  {loading ? (
+                  {loadEmp ? (
                     <tr>
                       <td colSpan={5} className="h-[450px] text-center">
                         <div className="flex flex-col items-center justify-center gap-2">
@@ -678,11 +679,11 @@ export default function AdminEmployeesPage() {
 
                     return (
                       <div className="space-y-4">
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                          <div className="bg-background-100/70 border border-background-200 rounded-xl p-4">
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                          {/* <div className="bg-background-100/70 border border-background-200 rounded-xl p-4">
                             <p className="text-xs text-foreground-500 font-medium">Assigned Videos</p>
                             <p className="text-2xl font-bold text-foreground-900 mt-1">{total}</p>
-                          </div>
+                          </div> */}
                           <div className="bg-accent-50/50 border border-accent-200 rounded-xl p-4">
                             <p className="text-xs text-accent-700 font-medium">Videos Completed</p>
                             <p className="text-2xl font-bold text-accent-700 mt-1">{completed}</p>
