@@ -111,7 +111,44 @@ export default function AdminDashboardPage() {
       setExporting(false);
     }
   };
+  const handleVideosByDesignationExportCSV = async () => {
+    try {
+      setExporting(true);
 
+      const queryParams = new URLSearchParams();
+      if (search.trim()) queryParams.append('search', search.trim());
+
+      // Request CSV blob from API endpoint with search filters
+      const response = await api.get(
+        `${API.DASHBOARD}/export-videos-by-designation?${queryParams.toString()}`,
+        {
+          responseType: 'blob',
+        }
+      );
+
+      const blobData = response.data || response;
+      const blob = new Blob([blobData], { type: 'text/csv;charset=utf-8;' });
+      const downloadUrl = window.URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.setAttribute(
+        'download',
+        `videos_by_designation_${new Date().toISOString().slice(0, 10)}.csv`
+      );
+
+      document.body.appendChild(link);
+      link.click();
+
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      console.error('CSV Export Error:', err);
+      alert('Failed to export CSV. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
   // Fetch Stats & Designation data on mount
   useEffect(() => {
     fetchStats();
@@ -482,10 +519,10 @@ export default function AdminDashboardPage() {
                           <td className="px-5 py-3 text-center">
                             <span
                               className={`text-sm font-medium ${passNum >= 70
-                                  ? 'text-accent-600'
-                                  : passNum >= 40
-                                    ? 'text-amber-600'
-                                    : 'text-red-600'
+                                ? 'text-accent-600'
+                                : passNum >= 40
+                                  ? 'text-amber-600'
+                                  : 'text-red-600'
                                 }`}
                             >
                               {ep?.passRate || '0%'}
@@ -514,24 +551,58 @@ export default function AdminDashboardPage() {
           </div>
 
           {/* Videos by Designation - Full Width Card Grid */}
-          <div className="mb-10">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="font-medium text-foreground-900 text-sm">Videos by Designation</h3>
-                <p className="text-xs text-foreground-500 mt-0.5">Training content distribution across roles</p>
+          <div className="mb-10 rounded-2xl border border-border/40 bg-card/60 p-6 shadow-sm backdrop-blur-md">
+            {/* Header Section */}
+            <div className="flex flex-col gap-4 border-b border-border/40 pb-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  {/* <span className="inline-block h-2 w-2 rounded-full bg-primary"></span> */}
+                  <h3 className="text-base font-semibold tracking-tight text-foreground">
+                    Videos by Designation
+                  </h3>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Training content distribution and analytics across organizational roles
+                </p>
               </div>
-              <button
-                onClick={() => navigate('/admin/videos')}
-                className="inline-flex items-center gap-1.5 text-xs text-primary-600 hover:text-primary-700 font-medium cursor-pointer whitespace-nowrap"
-              >
-                Manage Videos
-                <i className="ri-arrow-right-line"></i>
-              </button>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2.5">
+                <button
+                  onClick={handleVideosByDesignationExportCSV}
+                  disabled={exporting}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-border/60 bg-background/80 px-3.5 py-2 text-xs font-medium text-foreground transition-all duration-200 hover:border-border hover:bg-accent/50 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer shadow-xs"
+                >
+                  {exporting ? (
+                    <>
+                      <i className="ri-loader-4-line animate-spin text-sm text-primary"></i>
+                      <span>Exporting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <i className="ri-download-2-line text-sm text-muted-foreground"></i>
+                      <span>Export Videos</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => navigate('/admin/videos')}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary/10 px-3.5 py-2 text-xs font-semibold text-primary transition-all duration-200 hover:bg-primary/20 focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer whitespace-nowrap"
+                >
+                  <span>Manage Videos</span>
+                  <i className="ri-arrow-right-up-line text-xs"></i>
+                </button>
+              </div>
             </div>
-            <DesignationGrid
-              videosByDesg={videosByDesg}
-              designationIcons={designationIcons}
-            />
+
+            {/* Content Grid Container */}
+            <div className="pt-5">
+              <DesignationGrid
+                videosByDesg={videosByDesg}
+                designationIcons={designationIcons}
+              />
+            </div>
           </div>
         </div>
       </main>

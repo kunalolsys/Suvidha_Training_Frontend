@@ -32,6 +32,7 @@ export default function LearnPage() {
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [quizPassed, setQuizPassed] = useState<boolean | null>(null);
   const [correctCount, setCorrectCount] = useState(0);
+  const [questionSummaries, setQuestionSummaries] = useState<any[]>([]); // 🎯 State to store mapped question summary
   const [videoCompleted, setVideoCompleted] = useState(false);
   const modalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -118,6 +119,9 @@ export default function LearnPage() {
               97 + (q.options || []).findIndex((o: any) => o.isCorrect)
             )
             : "",
+
+        rawOptions: q.options || [],
+        explanation: q.explanation || "",
       }));
   }, [questions, videoId]);
 
@@ -131,7 +135,6 @@ export default function LearnPage() {
 
     return (
       allVideos.find((v: any) => {
-        // Multi-designation array matching support
         const userDesig = user?.designation?._id?.toString() || user?.designation?.toString();
         const vDesigs = Array.isArray(v.designation)
           ? v.designation.map((d: any) => d._id?.toString() || d.toString())
@@ -143,16 +146,33 @@ export default function LearnPage() {
     );
   }, [video, allVideos, user]);
 
-  // 🎯 Updated Quiz Submission aligned with Automated Server-side Grading
+  // 🎯 Updated Quiz Submission handling with questionSummaries mapping
   const handleQuizSubmit = useCallback(
     async (answers: Record<string, string>) => {
       if (!user || !videoId) return;
 
-      // Map answers to expected payload: [{ questionId, selectedOption }]
       const formattedAnswers = Object.entries(answers).map(([qId, selectedLetter]) => ({
         questionId: qId,
         selectedOption: ["a", "b", "c", "d", "e"].indexOf(selectedLetter),
       }));
+
+      // 🎯 Build Question Summary array for Review Modal
+      const mappedSummaries = videoQuestions.map((q) => {
+        const selectedLetter = answers[q.id];
+        const userSelectedOptObj = q.options.find((o) => o.id === selectedLetter);
+        const correctOptObj = q.options.find((o) => o.id === q.correctOption);
+
+        const isCorrect = selectedLetter === q.correctOption;
+
+        return {
+          _id: q.id,
+          questionText: q.question,
+          userAnswer: userSelectedOptObj ? userSelectedOptObj.text : "Not Answered",
+          correctAnswer: correctOptObj ? correctOptObj.text : "N/A",
+          isCorrect,
+          explanation: q.explanation,
+        };
+      });
 
       try {
         const res = await api.post(`${API.PROGRESS}/submit-quiz`, {
@@ -160,31 +180,32 @@ export default function LearnPage() {
           answers: formattedAnswers,
         });
 
-        // Parse automated grading outcome returned by the backend
         const attemptResult = res.data?.data?.latestAttempt || res.data?.latestAttempt;
 
         if (attemptResult) {
           setCorrectCount(attemptResult.correctCount ?? 0);
           setQuizPassed(attemptResult.passed ?? false);
         } else {
-          // Fallback if backend wrapper varies
-          setQuizPassed(true);
+          const calculatedCorrect = mappedSummaries.filter((s) => s.isCorrect).length;
+          setCorrectCount(calculatedCorrect);
+          setQuizPassed((calculatedCorrect / (videoQuestions.length || 1)) >= 0.7);
         }
 
+        setQuestionSummaries(mappedSummaries); // 🎯 Save summaries to state
         setQuizSubmitted(true);
-        // Refresh local user progress list
         fetchProgress();
       } catch (err) {
         console.error("Failed to submit quiz attempt:", err);
       }
     },
-    [user, videoId]
+    [user, videoId, videoQuestions]
   );
 
   const handleRetry = useCallback(() => {
     setQuizSubmitted(false);
     setQuizPassed(null);
     setCorrectCount(0);
+    setQuestionSummaries([]);
     setVideoCompleted(false);
   }, []);
 
@@ -214,7 +235,6 @@ export default function LearnPage() {
     );
   }
 
-  // 2. NOT FOUND STATE
   if (!video) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background-50 px-4">
@@ -352,6 +372,7 @@ export default function LearnPage() {
         </div>
       </main>
 
+      {/* 🎯 Passed questionSummaries to QuizResult */}
       {quizSubmitted && quizPassed !== null && (
         <QuizResult
           passed={quizPassed}
@@ -359,6 +380,8 @@ export default function LearnPage() {
           totalCount={videoQuestions.length}
           hasNextVideo={!!nextVideo}
           nextVideoId={nextVideo?._id || nextVideo?.id}
+          minPassPercentage={70}
+          questionSummaries={questionSummaries}
           onRetry={handleRetry}
           onGoToDashboard={handleGoToDashboard}
         />
