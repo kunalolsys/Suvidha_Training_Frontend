@@ -84,7 +84,38 @@ export default function AdminVideosPage() {
       // setLoading(false);
     }
   };
-  // Cleanup timer on unmount
+  const handleExportVideos = async (type = "excel") => {
+    try {
+      const res = await api.get(`${API.DASHBOARD}/export-videos`, {
+        params: {
+          search: debouncedSearch,
+          designation: filterDesignation,
+        },
+        responseType: "blob", // 🚀 Essential for CSV download
+      });
+
+      const blobData = res.data || res;
+      const blob = new Blob([blobData], { type: 'text/csv;charset=utf-8;' });
+      const downloadUrl = window.URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.setAttribute(
+        'download',
+        `videos_by_designation_${new Date().toISOString().slice(0, 10)}.csv`
+      );
+
+      document.body.appendChild(link);
+      link.click();
+
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+
+    } catch (err) {
+      console.error("Failed to export videos CSV:", err);
+    }
+  };;
+
   useEffect(() => {
     fetchVideos();
     fetchDesignations();
@@ -226,6 +257,7 @@ export default function AdminVideosPage() {
 
           {/* Filters */}
           <div className="flex flex-col sm:flex-row gap-3 mb-6">
+            {/* Search Input */}
             <div className="relative flex-1">
               <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-foreground-400"></i>
               <input
@@ -236,6 +268,8 @@ export default function AdminVideosPage() {
                 className="w-full pl-10 pr-4 py-2.5 bg-background-50 border border-background-200 rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400"
               />
             </div>
+
+            {/* Designation Select */}
             <Select
               value={filterDesignation || undefined}
               placeholder="All Designations"
@@ -255,7 +289,21 @@ export default function AdminVideosPage() {
                 })),
               ]}
             />
-            <button onClick={openAdd} className="px-5 py-2.5 bg-primary-500 hover:bg-primary-600 text-background-50 font-medium rounded-xl text-sm transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer">
+
+            {/* 🚀 Export Excel Button */}
+            <button
+              onClick={() => handleExportVideos("excel")}
+              className="px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-medium rounded-xl text-sm transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer"
+            >
+              <i className="ri-file-excel-2-line text-lg text-emerald-600"></i>
+              Export
+            </button>
+
+            {/* Add Video Button */}
+            <button
+              onClick={openAdd}
+              className="px-5 py-2.5 bg-primary-500 hover:bg-primary-600 text-background-50 font-medium rounded-xl text-sm transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer"
+            >
               <i className="ri-add-line text-lg"></i>
               Add Video
             </button>
