@@ -256,16 +256,16 @@ export default function AdminVideosPage() {
           </div> */}
 
           {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-3 mb-6">
+          <div className="flex flex-col sm:flex-row gap-3 mb-6 relative z-10 items-center">
             {/* Search Input */}
-            <div className="relative flex-1">
+            <div className="relative flex-1 w-full sm:w-auto">
               <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-foreground-400"></i>
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search videos..."
-                className="w-full pl-10 pr-4 py-2.5 bg-background-50 border border-background-200 rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400"
+                className="w-full h-10 pl-10 pr-4 bg-background-50 border border-background-200 rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400"
               />
             </div>
 
@@ -277,7 +277,8 @@ export default function AdminVideosPage() {
               showSearch
               optionFilterProp="label"
               onChange={(value) => setFilterDesignation(value || "")}
-              className="w-64"
+              className="w-full sm:w-64 h-10"
+              style={{ height: '40px' }}
               options={[
                 {
                   label: "All Designations",
@@ -292,8 +293,9 @@ export default function AdminVideosPage() {
 
             {/* 🚀 Export Excel Button */}
             <button
+              type="button"
               onClick={() => handleExportVideos("excel")}
-              className="px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-medium rounded-xl text-sm transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer"
+              className="h-10 px-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-medium rounded-xl text-sm transition-colors flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer"
             >
               <i className="ri-file-excel-2-line text-lg text-emerald-600"></i>
               Export
@@ -301,8 +303,9 @@ export default function AdminVideosPage() {
 
             {/* Add Video Button */}
             <button
+              type="button"
               onClick={openAdd}
-              className="px-5 py-2.5 bg-primary-500 hover:bg-primary-600 text-background-50 font-medium rounded-xl text-sm transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer"
+              className="h-10 px-5 bg-primary-500 hover:bg-primary-600 text-background-50 font-medium rounded-xl text-sm transition-colors flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer"
             >
               <i className="ri-add-line text-lg"></i>
               Add Video

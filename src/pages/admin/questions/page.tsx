@@ -312,17 +312,20 @@ export default function AdminQuestionsPage() {
           </div> */}
 
           {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-3 mb-6">
-            <div className="relative flex-1">
+          <div className="flex flex-col sm:flex-row gap-3 mb-6 items-center">
+            {/* Search Input */}
+            <div className="relative flex-1 w-full sm:w-auto">
               <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-foreground-400"></i>
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search questions..."
-                className="w-full pl-10 pr-4 py-2.5 bg-background-50 border border-background-200 rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400"
+                className="w-full h-10 pl-10 pr-4 bg-background-50 border border-background-200 rounded-xl text-sm text-foreground-900 focus:outline-none focus:border-primary-400"
               />
             </div>
+
+            {/* Video Select */}
             <Select
               value={filterVideo || undefined}
               placeholder="All Videos"
@@ -330,7 +333,8 @@ export default function AdminQuestionsPage() {
               showSearch
               optionFilterProp="label"
               onChange={(value) => setFilterVideo(value || "")}
-              className="w-64"
+              className="w-full sm:w-64 h-10"
+              style={{ height: '40px' }}
               options={[
                 {
                   label: "All Videos",
@@ -342,7 +346,13 @@ export default function AdminQuestionsPage() {
                 })),
               ]}
             />
-            <button onClick={openAdd} className="px-5 py-2.5 bg-primary-500 hover:bg-primary-600 text-background-50 font-medium rounded-xl text-sm transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer">
+
+            {/* Add Question Button */}
+            <button
+              type="button"
+              onClick={openAdd}
+              className="h-10 px-5 bg-primary-500 hover:bg-primary-600 text-background-50 font-medium rounded-xl text-sm transition-colors flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer w-full sm:w-auto"
+            >
               <i className="ri-add-line text-lg"></i>
               Add Question
             </button>
